@@ -186,7 +186,7 @@ class App(tk.Tk):
             self.title_vars.append(var)
 
         # Multi-sheet / tabs ──────────────────────────────────────────────────
-        mf = ttk.LabelFrame(left, text="Multi-Sheet Assembly (for taping)", padding=6)
+        mf = ttk.LabelFrame(left, text="Multi-Sheet Assembly", padding=6)
         mf.pack(fill="x", **pad)
 
         tk.Label(mf, text="Sheets wide:", anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
@@ -199,8 +199,16 @@ class App(tk.Tk):
             row=0, column=3, sticky="w", padx=8, pady=3)
 
         self.tab_size_var = make_combo(mf, 1, "Tab overlap:", list(TAB_SIZES.keys()), "1/4 inch (6mm)", width=18)
-        tk.Label(mf, text="Cut shaded edge,\ntape under neighbour sheet.",
-                 fg="gray", justify="left").grid(row=2, column=0, columnspan=4, sticky="w", padx=8, pady=2)
+
+        tk.Label(mf, text="Assembly:", anchor="w").grid(row=2, column=0, sticky="w", padx=8, pady=3)
+        self.tab_style_var = tk.StringVar(value="tape")
+        ttk.Combobox(mf, textvariable=self.tab_style_var,
+                     values=["tape", "insert"], state="readonly", width=10).grid(
+            row=2, column=1, columnspan=3, sticky="w", padx=8, pady=3)
+        self._tab_hint = tk.Label(mf, text="Cut shaded edge, tape under neighbour sheet.",
+                                  fg="gray", justify="left", wraplength=260)
+        self._tab_hint.grid(row=3, column=0, columnspan=4, sticky="w", padx=8, pady=2)
+        self.tab_style_var.trace_add("write", self._on_tab_style)
 
         tk.Label(mf, text="Dungeon size (squares):", anchor="w").grid(row=3, column=0, sticky="w", padx=8, pady=3)
         self.dungeon_cols_var = tk.StringVar(value="")
@@ -315,6 +323,16 @@ class App(tk.Tk):
 
     def _on_notes_toggle(self):
         self._notes_entry.config(state="normal" if self.notes_enabled_var.get() else "disabled")
+        self._schedule_preview()
+
+    def _on_tab_style(self, *_):
+        style = self.tab_style_var.get()
+        if style == "insert":
+            self._tab_hint.config(
+                text="Red: cut comb tabs on strip edge. Green: cut slots on mating edge. "
+                     "Tabs insert from behind, fold flat — writing surface stays clean.")
+        else:
+            self._tab_hint.config(text="Cut shaded edge, tape under neighbour sheet.")
         self._schedule_preview()
 
     def _on_preset(self, _=None):
@@ -474,6 +492,7 @@ class App(tk.Tk):
             "sheets_wide":      int(self.sheets_wide_var.get()),
             "sheets_tall":      int(self.sheets_tall_var.get()),
             "tab_in":           TAB_SIZES[self.tab_size_var.get()],
+            "tab_style":        self.tab_style_var.get(),
             "notes_bottom_in":  float(self.notes_bottom_var.get() or 0) if self.notes_enabled_var.get() else 0.0,
             "start_col":    int(self.start_col_var.get())    if self.start_col_var.get().strip()    else None,
             "start_row":    int(self.start_row_var.get())    if self.start_row_var.get().strip()    else None,

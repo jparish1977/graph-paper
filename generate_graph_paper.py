@@ -60,6 +60,7 @@ def generate_graph_paper(
     notes_bottom_in=0.0,
     start_col=None, start_row=None,    # 1-indexed grid squares from top-left
     dungeon_cols=None, dungeon_rows=None,  # total dungeon size in grid squares
+    tab_style="tape",   # "tape" | "insert"
 ):
     width_px  = int(width_in  * dpi)
     height_px = int(height_in * dpi)
@@ -121,7 +122,8 @@ def generate_graph_paper(
     draw = ImageDraw.Draw(img)
 
     # ── tab zone shading ─────────────────────────────────────────────────
-    tab_fill = (210, 230, 255)
+    tab_fill  = (210, 230, 255)
+    slot_fill = (220, 255, 220)
     if tab_px > 0:
         if sheet_col > 0:
             draw.rectangle([margin_px, margin_px,
@@ -129,6 +131,13 @@ def generate_graph_paper(
         if sheet_row > 0:
             draw.rectangle([margin_px, margin_px,
                             width_px - margin_px, margin_px + tab_px], fill=tab_fill)
+        if tab_style == "insert":
+            if sheet_col < sheets_wide - 1:
+                draw.rectangle([width_px - margin_px - tab_px, margin_px,
+                                width_px - margin_px, grid_bottom], fill=slot_fill)
+            if sheet_row < sheets_tall - 1:
+                draw.rectangle([margin_px, grid_bottom - tab_px,
+                                width_px - margin_px, grid_bottom], fill=slot_fill)
 
     # ── grid lines ───────────────────────────────────────────────────────
     def draw_line(start, end, color, w):
@@ -156,28 +165,105 @@ def generate_graph_paper(
             draw_line((margin_px, y), (width_px - margin_px, y), line_color, line_thickness)
         y += grid_px
 
-    # ── cut guides on tab zones ───────────────────────────────────────────
+    # ── cut / insert guides ───────────────────────────────────────────────
     if tab_px > 0:
         cut_color  = (200, 40, 40)
+        slot_color = (30, 140, 30)
         cut_w      = max(1, heavy_thickness)
         guide_dash = max(4, dpi // 15)
 
-        if sheet_col > 0:
-            cx = margin_px + tab_px
-            draw_dashed_line(draw, (cx, 0), (cx, height_px),
-                             cut_color, width=cut_w,
-                             dash_length=guide_dash, gap_length=guide_dash)
-            # rotate text to fit entirely within the tab strip
-            _draw_rotated_label(img, "CUT / TAPE UNDER", cut_color, font,
-                                cx=margin_px + tab_px // 2, cy=height_px // 2)
+        def seam_tabs(seam_top, seam_bot):
+            """Return list of (gap_top, tab_top, tab_bot, gap_bot) in px."""
+            seam_len   = seam_bot - seam_top
+            period     = max(grid_px * 4, int(box_px * 1.2))
+            n_periods  = max(2, round(seam_len / period))
+            act_period = seam_len / n_periods
+            tab_h      = round(act_period * 0.5)
+            tabs = []
+            for i in range(n_periods):
+                gap_top = seam_top + i * act_period
+                tab_top = gap_top + round((act_period - tab_h) / 2)
+                tabs.append((gap_top, tab_top, tab_top + tab_h, gap_top + act_period))
+            return tabs
 
-        if sheet_row > 0:
-            cy = margin_px + tab_px
-            draw_dashed_line(draw, (0, cy), (width_px, cy),
-                             cut_color, width=cut_w,
-                             dash_length=guide_dash, gap_length=guide_dash)
-            draw.text((width_px // 2, margin_px + tab_px // 2),
-                      "CUT / TAPE UNDER", fill=cut_color, font=font, anchor="mm")
+        if tab_style == "tape":
+            if sheet_col > 0:
+                cx = margin_px + tab_px
+                draw_dashed_line(draw, (cx, 0), (cx, height_px),
+                                 cut_color, width=cut_w,
+                                 dash_length=guide_dash, gap_length=guide_dash)
+                _draw_rotated_label(img, "CUT / TAPE UNDER", cut_color, font,
+                                    cx=margin_px + tab_px // 2, cy=height_px // 2)
+            if sheet_row > 0:
+                cy = margin_px + tab_px
+                draw_dashed_line(draw, (0, cy), (width_px, cy),
+                                 cut_color, width=cut_w,
+                                 dash_length=guide_dash, gap_length=guide_dash)
+                draw.text((width_px // 2, margin_px + tab_px // 2),
+                          "CUT / TAPE UNDER", fill=cut_color, font=font, anchor="mm")
+
+        else:  # "insert"
+            # LEFT edge — comb cut guide
+            if sheet_col > 0:
+                cx = margin_px + tab_px
+                seam_top = margin_px + tab_px if sheet_row > 0 else margin_px
+                for gap_top, tab_top, tab_bot, gap_bot in seam_tabs(seam_top, grid_bottom):
+                    draw_dashed_line(draw, (cx, int(gap_top)), (cx, int(tab_top)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (cx, int(tab_bot)), (cx, int(gap_bot)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (margin_px, int(tab_top)), (cx, int(tab_top)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (margin_px, int(tab_bot)), (cx, int(tab_bot)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                _draw_rotated_label(img, "CUT TABS / INSERT", cut_color, font,
+                                    cx=margin_px + tab_px // 2, cy=height_px // 2)
+
+            # TOP edge — comb cut guide
+            if sheet_row > 0:
+                cy = margin_px + tab_px
+                seam_left = margin_px + tab_px if sheet_col > 0 else margin_px
+                for gap_l, tab_l, tab_r, gap_r in seam_tabs(seam_left, width_px - margin_px):
+                    draw_dashed_line(draw, (int(gap_l), cy), (int(tab_l), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (int(tab_r), cy), (int(gap_r), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (int(tab_l), margin_px), (int(tab_l), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (int(tab_r), margin_px), (int(tab_r), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                draw.text((width_px // 2, margin_px + tab_px // 2),
+                          "CUT TABS / INSERT", fill=cut_color, font=font, anchor="mm")
+
+            # RIGHT edge — slot marks
+            if sheet_col < sheets_wide - 1:
+                slot_x0 = width_px - margin_px - tab_px
+                slot_x1 = width_px - margin_px
+                seam_top = margin_px + tab_px if sheet_row > 0 else margin_px
+                for _, tab_top, tab_bot, _ in seam_tabs(seam_top, grid_bottom):
+                    draw.rectangle([slot_x0, int(tab_top), slot_x1, int(tab_bot)],
+                                   outline=slot_color, width=cut_w)
+                _draw_rotated_label(img, "CUT SLOTS", slot_color, font,
+                                    cx=slot_x0 + tab_px // 2, cy=grid_bottom // 2)
+
+            # BOTTOM edge — slot marks
+            if sheet_row < sheets_tall - 1:
+                slot_y0 = grid_bottom - tab_px
+                slot_y1 = grid_bottom
+                seam_left = margin_px + tab_px if sheet_col > 0 else margin_px
+                for _, tab_l, tab_r, _ in seam_tabs(seam_left, width_px - margin_px):
+                    draw.rectangle([int(tab_l), slot_y0, int(tab_r), slot_y1],
+                                   outline=slot_color, width=cut_w)
+                draw.text((width_px // 2, slot_y0 + tab_px // 2),
+                          "CUT SLOTS", fill=slot_color, font=font, anchor="mm")
 
     # ── index labels ─────────────────────────────────────────────────────
     label_cy = margin_px // 2           # vertical centre for column labels
