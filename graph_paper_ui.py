@@ -662,7 +662,7 @@ class App(tk.Tk):
         try:
             sys = platform.system()
             if sys == "Windows":
-                os.startfile(path, "print")
+                os.startfile(os.path.abspath(path))
             elif sys == "Darwin":
                 subprocess.run(["lpr", path])
             else:
