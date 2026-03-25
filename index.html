@@ -179,6 +179,9 @@ button.sm { padding: 2px 8px; font-size: 11px; }
   <div id="preview-wrap"><canvas id="preview-canvas"></canvas></div>
   <div id="preview-footer">
     <button onclick="refreshPreview()">Refresh Preview</button>
+    <button onclick="prevSheet()" id="btn-prev">◀</button>
+    <span id="sheet-label" style="font-size:11px;color:#444;min-width:60px;text-align:center"></span>
+    <button onclick="nextSheet()" id="btn-next">▶</button>
     <span id="preview-info"></span>
   </div>
 </main>
@@ -221,6 +224,7 @@ const BUILTIN_PRESETS = {
 
 let dungeonPresets = {};
 let previewScheduled = false;
+let previewCol = null, previewRow = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function indexLabelFromNum(n) {
@@ -526,21 +530,104 @@ function readParams(dpiOverride) {
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────
+// previewCol/Row: null = composite view, otherwise zoom into that sheet
 function refreshPreview() {
   const wrap   = document.getElementById('preview-wrap');
   const canvas = document.getElementById('preview-canvas');
   const params = readParams();
+  const { sheetsWide, sheetsTall } = params;
+  const multi = sheetsWide > 1 || sheetsTall > 1;
+  const gap = 8; // px between sheets in composite
+
+  // clamp zoom sheet
+  if (previewCol !== null) {
+    previewCol = Math.min(previewCol, sheetsWide - 1);
+    previewRow = Math.min(previewRow, sheetsTall - 1);
+  }
+
   const maxW = wrap.clientWidth  - 32;
   const maxH = wrap.clientHeight - 32;
-  const previewDpi = Math.max(30, Math.min(150, Math.floor(Math.min(maxW / params.widthIn, maxH / params.heightIn))));
-  generateGraphPaper(canvas, { ...params, dpi: previewDpi, sheetCol: 0, sheetRow: 0 });
-  const multi = params.sheetsWide > 1 || params.sheetsTall > 1;
-  document.getElementById('preview-header').textContent = multi ? 'Preview (Sheet A1)' : 'Preview';
+
+  if (!multi || previewCol !== null) {
+    // Single sheet view
+    const col = previewCol ?? 0, row = previewRow ?? 0;
+    const dpi = Math.max(30, Math.min(150, Math.floor(Math.min(maxW / params.widthIn, maxH / params.heightIn))));
+    generateGraphPaper(canvas, { ...params, dpi, sheetCol: col, sheetRow: row });
+    const name = multi ? `Sheet ${indexLabelFromNum(col)}${row + 1}` : '';
+    document.getElementById('preview-header').textContent = multi ? `Preview — ${name} (click composite for overview)` : 'Preview';
+    document.getElementById('sheet-label').textContent = name;
+  } else {
+    // Composite view: all sheets tiled in position
+    const totalW = sheetsWide * params.widthIn;
+    const totalH = sheetsTall * params.heightIn;
+    const scale  = Math.min((maxW - gap*(sheetsWide-1)) / (sheetsWide * params.widthIn),
+                            (maxH - gap*(sheetsTall-1)) / (sheetsTall * params.heightIn));
+    const dpi = Math.max(20, Math.min(96, Math.floor(scale)));
+    const sheetW = Math.round(params.widthIn  * dpi);
+    const sheetH = Math.round(params.heightIn * dpi);
+    const gapPx  = Math.round(gap * (dpi / 72));
+
+    canvas.width  = sheetsWide * sheetW + (sheetsWide - 1) * gapPx;
+    canvas.height = sheetsTall * sheetH + (sheetsTall - 1) * gapPx;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#888';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const off = document.createElement('canvas');
+    for (let row = 0; row < sheetsTall; row++) {
+      for (let col = 0; col < sheetsWide; col++) {
+        generateGraphPaper(off, { ...params, dpi, sheetCol: col, sheetRow: row });
+        ctx.drawImage(off, col * (sheetW + gapPx), row * (sheetH + gapPx));
+      }
+    }
+    document.getElementById('preview-header').textContent = `Preview — all ${sheetsWide}×${sheetsTall} sheets (◀▶ to zoom a sheet)`;
+    document.getElementById('sheet-label').textContent = '';
+  }
+
+  document.getElementById('btn-prev').disabled = (previewCol === null && !multi) || (previewCol === 0 && previewRow === 0);
+  document.getElementById('btn-next').disabled = (previewCol === null && !multi) || (previewCol === sheetsWide - 1 && previewRow === sheetsTall - 1);
   document.getElementById('preview-info').textContent =
-    `${params.widthIn}×${params.heightIn} in — ${params.sheetsWide}×${params.sheetsTall} sheet(s) — ${params.dpi} DPI`;
+    `${params.widthIn}×${params.heightIn} in — ${sheetsWide}×${sheetsTall} sheet(s) — ${params.dpi} DPI`;
+}
+
+function prevSheet() {
+  const { sheetsWide, sheetsTall } = readParams();
+  const multi = sheetsWide > 1 || sheetsTall > 1;
+  if (!multi) return;
+  if (previewCol === null) {
+    // entering zoom from composite: go to last sheet
+    previewCol = sheetsWide - 1; previewRow = sheetsTall - 1;
+  } else if (previewCol > 0) {
+    previewCol--;
+  } else if (previewRow > 0) {
+    previewRow--; previewCol = sheetsWide - 1;
+  } else {
+    // back to composite
+    previewCol = null; previewRow = null;
+  }
+  refreshPreview();
+}
+
+function nextSheet() {
+  const { sheetsWide, sheetsTall } = readParams();
+  const multi = sheetsWide > 1 || sheetsTall > 1;
+  if (!multi) return;
+  if (previewCol === null) {
+    // entering zoom from composite: go to first sheet
+    previewCol = 0; previewRow = 0;
+  } else if (previewCol < sheetsWide - 1) {
+    previewCol++;
+  } else if (previewRow < sheetsTall - 1) {
+    previewRow++; previewCol = 0;
+  } else {
+    // back to composite
+    previewCol = null; previewRow = null;
+  }
+  refreshPreview();
 }
 
 function schedulePreview() {
+  previewCol = null; previewRow = null; // reset to composite on param change
   if (previewScheduled) return;
   previewScheduled = true;
   setTimeout(() => { previewScheduled = false; refreshPreview(); }, 250);
