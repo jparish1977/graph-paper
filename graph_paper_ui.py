@@ -52,12 +52,6 @@ GRID_SIZES = {
     "1 inch":    1.0,
 }
 
-BOX_SIZES = {
-    "1/2 inch": 0.5,
-    "1 inch":   1.0,
-    "2 inches": 2.0,
-    "4 inches": 4.0,
-}
 
 TAB_SIZES = {
     "1/8 inch (3mm)":  0.125,
@@ -160,8 +154,11 @@ class App(tk.Tk):
         gf = ttk.LabelFrame(left, text="Grid Options", padding=6)
         gf.pack(fill="x", **pad)
 
-        self.grid_size_var    = make_combo(gf, 0, "Grid spacing:", list(GRID_SIZES.keys()), "1/4 inch")
-        self.box_size_var     = make_combo(gf, 1, "Box (heavy line) interval:", list(BOX_SIZES.keys()), "1 inch")
+        self.grid_size_var = make_combo(gf, 0, "Grid spacing:", list(GRID_SIZES.keys()), "1/4 inch")
+        tk.Label(gf, text="Heavy line every N cells:", anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=3)
+        self.box_cells_var = tk.StringVar(value="4")
+        ttk.Spinbox(gf, from_=1, to=200, textvariable=self.box_cells_var, width=5).grid(
+            row=1, column=1, sticky="w", padx=8, pady=3)
         self.line_thickness_var  = make_entry(gf, 2, "Line thickness:", "1", width=5)
         self.heavy_thickness_var = make_entry(gf, 3, "Heavy thickness:", "2", width=5)
         self.dashed_var = tk.BooleanVar(value=True)
@@ -280,7 +277,7 @@ class App(tk.Tk):
     # ── traces ────────────────────────────────────────────────────────────────
     def _wire_traces(self):
         watch = [self.width_var, self.height_var, self.margin_var, self.font_size_var,
-                 self.dpi_var, self.output_var, self.grid_size_var, self.box_size_var,
+                 self.dpi_var, self.output_var, self.grid_size_var, self.box_cells_var,
                  self.preset_var, self.line_thickness_var, self.heavy_thickness_var,
                  self.format_var, self.sheets_wide_var, self.sheets_tall_var,
                  self.tab_size_var, self.notes_bottom_var,
@@ -399,8 +396,9 @@ class App(tk.Tk):
             height_in = float(self.height_var.get())
             margin_in = float(self.margin_var.get())
             notes_in  = float(self.notes_bottom_var.get() or 0)
-            grid_in   = GRID_SIZES[self.grid_size_var.get()]
-            box_in    = BOX_SIZES[self.box_size_var.get()]
+            grid_in    = GRID_SIZES[self.grid_size_var.get()]
+            box_cells  = max(1, int(self.box_cells_var.get() or 4))
+            box_in     = box_cells * grid_in
             dcols = int(self.dungeon_cols_var.get()) if self.dungeon_cols_var.get().strip() else None
             drows = int(self.dungeon_rows_var.get()) if self.dungeon_rows_var.get().strip() else None
             if not dcols or not drows:
@@ -458,7 +456,7 @@ class App(tk.Tk):
             "dpi":              dpi,
             "margin_in":        float(self.margin_var.get()),
             "grid_size_in":     GRID_SIZES[self.grid_size_var.get()],
-            "box_size_in":      BOX_SIZES[self.box_size_var.get()],
+            "box_size_in":      max(1, int(self.box_cells_var.get() or 4)) * GRID_SIZES[self.grid_size_var.get()],
             "font_size":        int(fs) if fs else None,
             "line_color":       tuple(self._line_color),
             "heavy_color":      tuple(self._heavy_color),
