@@ -80,7 +80,7 @@ def generate_graph_paper(
 
     label_font_size = max(1, grid_px // 2)
     label_font  = _scaled_font(label_font_size)
-    label_color = (225, 225, 225)
+    label_color = (180, 180, 180)
 
     # title block font: fit n_lines inside one box height
     if title_lines is None:
@@ -225,7 +225,7 @@ def generate_graph_paper(
         sheet_label = f"Sheet {index_label_from_num(sheet_col)}{sheet_row + 1}"
         draw.text((width_px - margin_px - box_px,
                    height_px - margin_px - font_size - 2),
-                  sheet_label, fill=index_color, font=font)
+                  sheet_label, fill=(220, 220, 220), font=font)
 
     # ── dungeon border + start marker ────────────────────────────────────
     # Dungeon origin: one box below top margin (clears title block), centered
