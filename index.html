@@ -704,8 +704,15 @@ function deletePreset() {
 function refreshPresetList() {
   const sel = document.getElementById('dng-select');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">— select dungeon —</option>' +
-    Object.keys(dungeonPresets).map(k => `<option>${k}</option>`).join('');
+  sel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— select dungeon —';
+  sel.appendChild(blank);
+  for (const k of Object.keys(dungeonPresets)) {
+    const opt = document.createElement('option');
+    opt.value = k; opt.textContent = k;
+    sel.appendChild(opt);
+  }
   if (dungeonPresets[cur]) sel.value = cur;
 }
 
