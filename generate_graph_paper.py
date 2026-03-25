@@ -320,7 +320,8 @@ def generate_graph_paper(
         rule_px = max(grid_px, int(0.25 * dpi))
         draw.line([(margin_px, grid_bottom), (width_px - margin_px, grid_bottom)],
                   fill=(0, 0, 0), width=max(1, heavy_thickness))
-        draw.text((margin_px + pad_inner, grid_bottom + pad_inner),
+        notes_label_x = margin_px + (tab_px if sheet_col > 0 else 0) + pad_inner
+        draw.text((notes_label_x, grid_bottom + pad_inner),
                   "Notes", fill=index_color, font=font)
         y = grid_bottom + rule_px
         while y <= height_px - margin_px:
