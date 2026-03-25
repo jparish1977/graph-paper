@@ -1,0 +1,62 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    name: Python (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install ruff mypy
+      - name: Clone JP_TOOLS
+        run: git clone https://github.com/jparish1977/JP_TOOLS.git /tmp/jp_tools
+      - name: Run checks
+        run: python /tmp/jp_tools/check.py . --lang python --pretty
+
+  js-css-html:
+    name: JS / CSS / HTML (eslint + stylelint + prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Clone JP_TOOLS
+        run: git clone https://github.com/jparish1977/JP_TOOLS.git /tmp/jp_tools
+      - name: Install JS tools
+        run: cd /tmp/jp_tools && npm install
+      - name: Check JS
+        run: python /tmp/jp_tools/check.py app.js --lang js --pretty
+      - name: Check CSS
+        run: python /tmp/jp_tools/check.py style.css --lang css --pretty
+      - name: Check HTML
+        run: python /tmp/jp_tools/check.py index.html --lang html --pretty
+
+  php:
+    name: PHP (phpstan + phpcs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Clone JP_TOOLS
+        run: git clone https://github.com/jparish1977/JP_TOOLS.git /tmp/jp_tools
+      - name: Install PHP tools
+        run: cd /tmp/jp_tools && composer install --no-interaction
+      - name: Run checks
+        run: python /tmp/jp_tools/check.py . --lang php --pretty

@@ -1,5 +1,7 @@
 # Graph Paper Builder — Double Dungeons Edition
 
+[![Code Quality](https://github.com/jparish1977/graph-paper/actions/workflows/check.yml/badge.svg)](https://github.com/jparish1977/graph-paper/actions/workflows/check.yml)
+
 A printable graph paper generator with a GUI, built for mapping dungeons in the TurboGrafx-16 game *Double Dungeons*.
 
 ## Features
