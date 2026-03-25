@@ -1,8 +1,10 @@
 <?php
+
 /**
  * index.php — Graph Paper Builder web UI (PHP/GD)
  * Serve with: php -S localhost:8080
  */
+
 require_once __DIR__ . '/generate_graph_paper.php';
 
 $presets = [];
@@ -24,15 +26,15 @@ $gridSizes = [
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $gridKey   = $_POST['grid_size']  ?? '1/4 inch';
     $gridSzIn  = $gridSizes[$gridKey] ?? 0.25;
-    $boxCells  = max(1, (int)($_POST['box_cells'] ?? 4));
+    $boxCells  = max(1, (int) ($_POST['box_cells'] ?? 4));
 
     $params = [
-        'width_in'       => (float)($_POST['width']       ?? 8.5),
-        'height_in'      => (float)($_POST['height']      ?? 11.0),
-        'dpi'            => (int)($_POST['dpi']           ?? 150),
+        'width_in'       => (float) ($_POST['width']       ?? 8.5),
+        'height_in'      => (float) ($_POST['height']      ?? 11.0),
+        'dpi'            => (int) ($_POST['dpi']           ?? 150),
         'grid_size_in'   => $gridSzIn,
         'box_size_in'    => $boxCells * $gridSzIn,
-        'margin_in'      => (float)($_POST['margin']      ?? 0.25),
+        'margin_in'      => (float) ($_POST['margin']      ?? 0.25),
         'dashed'         => isset($_POST['dashed']),
         'title_lines'    => [
             $_POST['title1'] ?? 'Ginger Plays Games',
@@ -40,16 +42,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['title3'] ?? '',
             $_POST['title4'] ?? '',
         ],
-        'notes_bottom_in'=> isset($_POST['notes_enabled']) ? (float)($_POST['notes_in'] ?? 1.5) : 0.0,
+        'notes_bottom_in' => isset($_POST['notes_enabled']) ? (float) ($_POST['notes_in'] ?? 1.5) : 0.0,
         'tab_style'      => $_POST['tab_style'] ?? 'tape',
-        'dungeon_cols'   => $_POST['dungeon_cols'] ? (int)$_POST['dungeon_cols'] : null,
-        'dungeon_rows'   => $_POST['dungeon_rows'] ? (int)$_POST['dungeon_rows'] : null,
-        'start_col'      => $_POST['start_col'] ? (int)$_POST['start_col'] : null,
-        'start_row'      => $_POST['start_row'] ? (int)$_POST['start_row'] : null,
+        'dungeon_cols'   => $_POST['dungeon_cols'] ? (int) $_POST['dungeon_cols'] : null,
+        'dungeon_rows'   => $_POST['dungeon_rows'] ? (int) $_POST['dungeon_rows'] : null,
+        'start_col'      => $_POST['start_col'] ? (int) $_POST['start_col'] : null,
+        'start_row'      => $_POST['start_row'] ? (int) $_POST['start_row'] : null,
     ];
 
-    $sw = max(1, (int)($_POST['sheets_wide'] ?? 1));
-    $st = max(1, (int)($_POST['sheets_tall'] ?? 1));
+    $sw = max(1, (int) ($_POST['sheets_wide'] ?? 1));
+    $st = max(1, (int) ($_POST['sheets_tall'] ?? 1));
 
     if ($sw === 1 && $st === 1) {
         // Single sheet — serve PNG directly
@@ -72,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pngData = ob_get_clean();
         imagedestroy($s['img']);
         $col = gp_index_label($s['col']);
-        $zip->addFromString("sheet_{$col}{$s['row']}.png", $pngData);
+        $zip->addFromString(sprintf('sheet_%s%s.png', $col, $s['row']), $pngData);
     }
     $zip->close();
     header('Content-Type: application/zip');
@@ -122,8 +124,8 @@ $presetJson = json_encode(array_keys($presets));
       <label>Preset:</label>
       <select id="preset-sel" onchange="applyPreset(this.value)">
         <option value="">— select —</option>
-        <?php foreach (array_keys($presets) as $name): ?>
-        <option value="<?= htmlspecialchars($name) ?>"><?= htmlspecialchars($name) ?></option>
+        <?php foreach (array_keys($presets) as $name) : ?>
+        <option value="<?= htmlspecialchars((string) $name) ?>"><?= htmlspecialchars((string) $name) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
@@ -145,7 +147,7 @@ $presetJson = json_encode(array_keys($presets));
     <div class="section-title">Grid</div>
     <div class="field"><label>Grid size:</label>
       <select name="grid_size" id="grid_size">
-        <?php foreach (array_keys($gridSizes) as $k): ?>
+        <?php foreach (array_keys($gridSizes) as $k) : ?>
         <option value="<?= $k ?>" <?= $k === '1/4 inch' ? 'selected' : '' ?>><?= $k ?></option>
         <?php endforeach; ?>
       </select>

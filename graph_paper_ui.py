@@ -692,7 +692,8 @@ class App(tk.Tk):
         messagebox.showerror("Error", msg)
 
     def _print(self):
-        import tempfile, platform
+        import tempfile
+        import platform
         self.print_btn.config(state="disabled")
         self.status_var.set("Generating for print…")
         is_win = platform.system() == "Windows"
@@ -736,7 +737,8 @@ class App(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _do_print(self, paths):
-        import subprocess, platform
+        import subprocess
+        import platform
         self.print_btn.config(state="normal")
         self.status_var.set("Ready.")
         try:

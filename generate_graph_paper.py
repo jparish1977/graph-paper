@@ -314,7 +314,7 @@ def generate_graph_paper(
                                 radius=radius, outline=(0, 0, 0),
                                 width=max(1, heavy_thickness))
         block_cx = margin_px + block_w // 2
-        active_lines = [l for l in title_lines if l.strip()]
+        active_lines = [ln for ln in title_lines if ln.strip()]
         n_active = max(1, len(active_lines))
         total_text_h = n_active * title_font_size + (n_active - 1) * line_gap
         text_y = margin_px + (block_h - total_text_h) // 2
@@ -366,10 +366,14 @@ def generate_graph_paper(
             if y0 < y1:
                 draw.line([(x, y0), (x, y1)], fill=border_color, width=border_w)
 
-        if sy0 <= ty <= sy1: hline(ty, lx, rx)
-        if sy0 <= by <= sy1: hline(by, lx, rx)
-        if sx0 <= lx <= sx1: vline(lx, ty, by)
-        if sx0 <= rx <= sx1: vline(rx, ty, by)
+        if sy0 <= ty <= sy1:
+            hline(ty, lx, rx)
+        if sy0 <= by <= sy1:
+            hline(by, lx, rx)
+        if sx0 <= lx <= sx1:
+            vline(lx, ty, by)
+        if sx0 <= rx <= sx1:
+            vline(rx, ty, by)
 
         # ── dungeon-relative labels ───────────────────────────────────────
         dlabel_color = index_color
