@@ -254,6 +254,8 @@ class App(tk.Tk):
         br.pack(fill="x", pady=(6, 2))
         self.gen_btn = ttk.Button(br, text="Generate & Save", command=self._generate)
         self.gen_btn.pack(side="left", padx=4)
+        self.print_btn = ttk.Button(br, text="Print…", command=self._print)
+        self.print_btn.pack(side="left", padx=4)
 
         self.status_var = tk.StringVar(value="Ready.")
         tk.Label(left, textvariable=self.status_var, anchor="w", fg="gray").pack(fill="x", padx=4)
@@ -626,6 +628,52 @@ class App(tk.Tk):
         self.status_var.set(f"Error: {msg}")
         self.gen_btn.config(state="normal")
         messagebox.showerror("Error", msg)
+
+    def _print(self):
+        import tempfile, subprocess, platform
+        self.print_btn.config(state="disabled")
+        self.status_var.set("Generating for print…")
+        def worker():
+            try:
+                params = self._read_params()
+                dpi    = params["dpi"]
+                sw, st = params["sheets_wide"], params["sheets_tall"]
+                kw     = {k: v for k, v in params.items()
+                          if k not in ("dpi", "sheets_wide", "sheets_tall")}
+                suffix = ".pdf"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                    tmp = f.name
+                if sw == 1 and st == 1:
+                    img = generate_graph_paper(dpi=dpi, sheets_wide=1, sheets_tall=1, **kw)
+                    img.save(tmp, "PDF", resolution=dpi)
+                else:
+                    images = [img for _, _, img in generate_all_sheets(sw, st, dpi=dpi, **kw)]
+                    images[0].save(tmp, "PDF", resolution=dpi,
+                                   save_all=True, append_images=images[1:])
+                self.after(0, self._do_print, tmp)
+            except Exception as e:
+                self.after(0, self._error_print, str(e))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _do_print(self, path):
+        import subprocess, platform
+        self.print_btn.config(state="normal")
+        self.status_var.set("Ready.")
+        try:
+            sys = platform.system()
+            if sys == "Windows":
+                os.startfile(path, "print")
+            elif sys == "Darwin":
+                subprocess.run(["lpr", path])
+            else:
+                subprocess.run(["lp", path])
+        except Exception as e:
+            messagebox.showerror("Print error", str(e))
+
+    def _error_print(self, msg):
+        self.print_btn.config(state="normal")
+        self.status_var.set(f"Error: {msg}")
+        messagebox.showerror("Print error", msg)
 
 
 if __name__ == "__main__":
