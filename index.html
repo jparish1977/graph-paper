@@ -129,7 +129,14 @@ button.sm { padding: 2px 8px; font-size: 11px; }
           <option value="0.5">1/2 inch (13mm)</option>
         </select>
       </div>
-      <div class="hint">Cut shaded edge, tape under neighbour sheet.</div>
+      <div class="field">
+        <label>Assembly method:</label>
+        <select id="tab-style">
+          <option value="tape">Tape under</option>
+          <option value="insert">Tab &amp; slot insert</option>
+        </select>
+      </div>
+      <div class="hint" id="tab-hint">Cut shaded edge, tape under neighbour sheet.</div>
       <div class="field">
         <label>Dungeon size (sq):</label>
         <div class="pair">
@@ -263,6 +270,7 @@ function generateGraphPaper(canvas, p) {
     sheetCol=0, sheetRow=0, sheetsWide=1, sheetsTall=1, tabIn=0.25,
     notesBottomIn=0, startCol=null, startRow=null,
     dungeonCols=null, dungeonRows=null,
+    tabStyle='tape',  // 'tape' | 'insert'
   } = p;
 
   const widthPx  = Math.round(widthIn  * dpi);
@@ -304,11 +312,17 @@ function generateGraphPaper(canvas, p) {
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, widthPx, heightPx);
 
-  // tab shading
+  // tab shading — left/top strip on sheets that go under neighbours
   if (tabPx > 0) {
     ctx.fillStyle = 'rgb(210,230,255)';
     if (sheetCol > 0) ctx.fillRect(marginPx, marginPx, tabPx, gridBottom - marginPx);
     if (sheetRow > 0) ctx.fillRect(marginPx, marginPx, widthPx - 2*marginPx, tabPx);
+    // insert mode: shade the slot zone on mating edges too (right / bottom)
+    if (tabStyle === 'insert') {
+      ctx.fillStyle = 'rgb(220,255,220)';
+      if (sheetCol < sheetsWide - 1) ctx.fillRect(widthPx - marginPx - tabPx, marginPx, tabPx, gridBottom - marginPx);
+      if (sheetRow < sheetsTall - 1) ctx.fillRect(marginPx, gridBottom - tabPx, widthPx - 2*marginPx, tabPx);
+    }
   }
 
   // grid lines
@@ -330,37 +344,147 @@ function generateGraphPaper(canvas, p) {
   }
   ctx.setLineDash([]);
 
-  // cut guides
+  // ── cut / insert guides ───────────────────────────────────────────────────
   if (tabPx > 0) {
-    const cutCol   = cssRgb([200, 40, 40]);
-    const cutW     = Math.max(1, heavyThickness);
-    const guideDash = Math.max(4, Math.round(dpi / 15));
+    const cutCol  = cssRgb([200, 40, 40]);
+    const slotCol = cssRgb([30, 140, 30]);
+    const cutW    = Math.max(1, heavyThickness);
+    const gDash   = Math.max(4, Math.round(dpi / 15));
 
-    if (sheetCol > 0) {
-      const cx = marginPx + tabPx;
-      ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
-      ctx.setLineDash([guideDash, guideDash]);
-      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, heightPx); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.save();
-      ctx.translate(marginPx + tabPx / 2, heightPx / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillStyle = cutCol;
-      ctx.font = `${autoFontSize}px monospace`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('CUT / TAPE UNDER', 0, 0);
-      ctx.restore();
+    // Compute evenly-spaced tab positions along a seam of given extent.
+    // Returns array of {tabTop, tabBot, gapTop, gapBot} in px.
+    function seamTabs(seamTop, seamBot) {
+      const seamLen   = seamBot - seamTop;
+      const period    = Math.max(gridPx * 4, Math.round(boxPx * 1.2));
+      const nPeriods  = Math.max(2, Math.round(seamLen / period));
+      const actPeriod = seamLen / nPeriods;
+      const tabH      = Math.round(actPeriod * 0.5);
+      const tabs = [];
+      for (let i = 0; i < nPeriods; i++) {
+        const gapTop = seamTop + i * actPeriod;
+        const tabTop = gapTop + Math.round((actPeriod - tabH) / 2);
+        tabs.push({ gapTop, tabTop, tabBot: tabTop + tabH, gapBot: gapTop + actPeriod });
+      }
+      return tabs;
     }
-    if (sheetRow > 0) {
-      const cy = marginPx + tabPx;
-      ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
-      ctx.setLineDash([guideDash, guideDash]);
-      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(widthPx, cy); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = cutCol;
-      ctx.font = `${autoFontSize}px monospace`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('CUT / TAPE UNDER', widthPx / 2, marginPx + tabPx / 2);
+
+    if (tabStyle === 'tape') {
+      // ── original tape-under guides ────────────────────────────────────────
+      if (sheetCol > 0) {
+        const cx = marginPx + tabPx;
+        ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
+        ctx.setLineDash([gDash, gDash]);
+        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, heightPx); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.save();
+        ctx.translate(marginPx + tabPx / 2, heightPx / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = cutCol; ctx.font = `${autoFontSize}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CUT / TAPE UNDER', 0, 0);
+        ctx.restore();
+      }
+      if (sheetRow > 0) {
+        const cy = marginPx + tabPx;
+        ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
+        ctx.setLineDash([gDash, gDash]);
+        ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(widthPx, cy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = cutCol; ctx.font = `${autoFontSize}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CUT / TAPE UNDER', widthPx / 2, marginPx + tabPx / 2);
+      }
+
+    } else {
+      // ── insert-tab guides ─────────────────────────────────────────────────
+
+      // LEFT edge: comb cut guide (tab strip becomes comb of rectangular tabs)
+      if (sheetCol > 0) {
+        const cx       = marginPx + tabPx;
+        const seamTop  = sheetRow > 0 ? marginPx + tabPx : marginPx;
+        const tabs     = seamTabs(seamTop, gridBottom);
+        ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
+        for (const { gapTop, tabTop, tabBot, gapBot } of tabs) {
+          ctx.setLineDash([gDash, gDash]);
+          // vertical cuts in the gap sections
+          ctx.beginPath(); ctx.moveTo(cx, gapTop); ctx.lineTo(cx, tabTop); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx, tabBot);  ctx.lineTo(cx, gapBot);  ctx.stroke();
+          // horizontal cuts at tab top and bottom (across full strip width)
+          ctx.beginPath(); ctx.moveTo(marginPx, tabTop); ctx.lineTo(cx, tabTop); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(marginPx, tabBot); ctx.lineTo(cx, tabBot); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.save();
+        ctx.translate(marginPx + tabPx / 2, heightPx / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = cutCol; ctx.font = `${autoFontSize}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CUT TABS / INSERT', 0, 0);
+        ctx.restore();
+      }
+
+      // TOP edge: comb cut guide (horizontal seam)
+      if (sheetRow > 0) {
+        const cy      = marginPx + tabPx;
+        const seamLeft = sheetCol > 0 ? marginPx + tabPx : marginPx;
+        const tabs    = seamTabs(seamLeft, widthPx - marginPx);
+        ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
+        for (const { gapTop: gapL, tabTop: tabL, tabBot: tabR, gapBot: gapR } of tabs) {
+          ctx.setLineDash([gDash, gDash]);
+          ctx.beginPath(); ctx.moveTo(gapL, cy); ctx.lineTo(tabL, cy); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(tabR, cy); ctx.lineTo(gapR, cy); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(tabL, marginPx); ctx.lineTo(tabL, cy); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(tabR, marginPx); ctx.lineTo(tabR, cy); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = cutCol; ctx.font = `${autoFontSize}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CUT TABS / INSERT', widthPx / 2, marginPx + tabPx / 2);
+      }
+
+      // RIGHT edge: slot marks (green dashed rectangles where to cut slits for left neighbour's tabs)
+      if (sheetCol < sheetsWide - 1) {
+        const slotX0  = widthPx - marginPx - tabPx;
+        const slotX1  = widthPx - marginPx;
+        const seamTop = sheetRow > 0 ? marginPx + tabPx : marginPx;
+        const tabs    = seamTabs(seamTop, gridBottom);
+        ctx.strokeStyle = slotCol; ctx.lineWidth = cutW;
+        ctx.setLineDash([gDash, gDash]);
+        for (const { tabTop, tabBot } of tabs) {
+          ctx.beginPath(); ctx.moveTo(slotX0, tabTop); ctx.lineTo(slotX1, tabTop); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(slotX0, tabBot); ctx.lineTo(slotX1, tabBot); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(slotX0, tabTop); ctx.lineTo(slotX0, tabBot); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(slotX1, tabTop); ctx.lineTo(slotX1, tabBot); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.save();
+        ctx.translate(slotX0 + tabPx / 2, gridBottom / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = slotCol; ctx.font = `${autoFontSize}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CUT SLOTS', 0, 0);
+        ctx.restore();
+      }
+
+      // BOTTOM edge: slot marks
+      if (sheetRow < sheetsTall - 1) {
+        const slotY0  = gridBottom - tabPx;
+        const slotY1  = gridBottom;
+        const seamLeft = sheetCol > 0 ? marginPx + tabPx : marginPx;
+        const tabs    = seamTabs(seamLeft, widthPx - marginPx);
+        ctx.strokeStyle = slotCol; ctx.lineWidth = cutW;
+        ctx.setLineDash([gDash, gDash]);
+        for (const { tabTop: tabL, tabBot: tabR } of tabs) {
+          ctx.beginPath(); ctx.moveTo(tabL, slotY0); ctx.lineTo(tabR, slotY0); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(tabL, slotY1); ctx.lineTo(tabR, slotY1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(tabL, slotY0); ctx.lineTo(tabL, slotY1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(tabR, slotY0); ctx.lineTo(tabR, slotY1); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = slotCol; ctx.font = `${autoFontSize}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CUT SLOTS', widthPx / 2, slotY0 + tabPx / 2);
+      }
     }
   }
 
@@ -526,6 +650,7 @@ function readParams(dpiOverride) {
     startRow:      parseInt(document.getElementById('start-row').value)        || null,
     notesBottomIn: notesEnabled ? (parseFloat(document.getElementById('notes-height').value) || 1.5) : 0,
     fontSize:      fsRaw ? parseInt(fsRaw) : null,
+    tabStyle:      document.getElementById('tab-style').value,
   };
 }
 
@@ -845,6 +970,13 @@ function init() {
 
   document.getElementById('dng-select').addEventListener('change', onDungeonPreset);
   document.getElementById('notes-enabled').addEventListener('change', onNotesToggle);
+  document.getElementById('tab-style').addEventListener('change', () => {
+    const insert = document.getElementById('tab-style').value === 'insert';
+    document.getElementById('tab-hint').textContent = insert
+      ? 'Red: cut comb tabs on strip edge. Green: cut slots on mating edge. Tabs insert from behind, fold flat — writing surface stays clean.'
+      : 'Cut shaded edge, tape under neighbour sheet.';
+    schedulePreview();
+  });
 
   // Auto-preview on any input change
   document.querySelectorAll('#sidebar input, #sidebar select').forEach(el => {
