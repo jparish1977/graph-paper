@@ -387,9 +387,13 @@ class App(tk.Tk):
         self.dungeon_rows_var.set(str(drows) if drows else "")
         self.start_col_var.set(str(sc) if sc else "")
         self.start_row_var.set(str(sr) if sr else "")
-        self.grid_size_var.set("1/4 inch")
+        self.grid_size_var.set(vals.get("grid_size", "1/4 inch"))
         self.preset_var.set("Custom")
-        self._auto_sheets()
+        if "sheets_wide" in vals and "sheets_tall" in vals:
+            self.sheets_wide_var.set(str(vals["sheets_wide"]))
+            self.sheets_tall_var.set(str(vals["sheets_tall"]))
+        else:
+            self._auto_sheets()
 
     def _auto_sheets(self):
         """Compute sheets_wide/tall needed to fit the dungeon on the current page size."""
