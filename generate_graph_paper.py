@@ -51,8 +51,9 @@ def generate_graph_paper(
     width_px  = int(width_in  * dpi)
     height_px = int(height_in * dpi)
     margin_px = int(margin_in * dpi)
-    grid_px   = max(1, int(grid_size_in * dpi))
-    box_px    = max(grid_px, int(box_size_in * dpi))
+    grid_px      = max(1, int(grid_size_in * dpi))
+    box_px       = max(grid_px, int(box_size_in * dpi))
+    grid_per_box = max(1, round(box_px / grid_px))  # grid steps per box interval
     tab_px    = int(tab_in * dpi) if (sheets_wide > 1 or sheets_tall > 1) else 0
     # notes only on the bottom row of sheets
     notes_px  = int(notes_bottom_in * dpi) if sheet_row == sheets_tall - 1 else 0
@@ -63,6 +64,10 @@ def generate_graph_paper(
     if font_size is None:
         font_size = max(1, int(box_px * 0.18))
     font = _scaled_font(font_size)
+
+    label_font_size = max(1, grid_px // 2)
+    label_font  = _scaled_font(label_font_size)
+    label_color = (180, 180, 180)
 
     # title block font: fit n_lines inside one box height
     if title_lines is None:
@@ -123,7 +128,7 @@ def generate_graph_paper(
     x = grid_x0
     while x <= width_px - margin_px:
         abs_x = (x - margin_px) + x_abs_base
-        if abs_x % box_px == 0:
+        if (abs_x // grid_px) % grid_per_box == 0:
             draw_line((x, margin_px), (x, grid_bottom), heavy_color, heavy_thickness)
         else:
             draw_line((x, margin_px), (x, grid_bottom), line_color, line_thickness)
@@ -132,7 +137,7 @@ def generate_graph_paper(
     y = grid_y0
     while y <= grid_bottom:
         abs_y = (y - margin_px) + y_abs_base
-        if abs_y % box_px == 0:
+        if (abs_y // grid_px) % grid_per_box == 0:
             draw_line((margin_px, y), (width_px - margin_px, y), heavy_color, heavy_thickness)
         else:
             draw_line((margin_px, y), (width_px - margin_px, y), line_color, line_thickness)
@@ -163,22 +168,25 @@ def generate_graph_paper(
                       "CUT / TAPE UNDER", fill=cut_color, font=font)
 
     # ── index labels ─────────────────────────────────────────────────────
-    label_y = margin_px // 2
+    label_cy = margin_px // 2           # vertical centre for column labels
+    label_cx = margin_px // 2           # horizontal centre for row labels
+
     x = grid_x0
     while x <= width_px - margin_px:
         abs_x = (x - margin_px) + x_abs_base
-        if abs_x % box_px == 0:
-            draw.text((x + 2, label_y), index_label_from_num(abs_x // box_px),
-                      fill=index_color, font=font)
+        if (abs_x // grid_px) % grid_per_box == 0:
+            cx = x + grid_px // 2
+            draw.text((cx, label_cy), index_label_from_num(abs_x // grid_px),
+                      fill=label_color, font=label_font, anchor="mm")
         x += grid_px
 
-    label_x = 2
     y = grid_y0
     while y <= grid_bottom:
         abs_y = (y - margin_px) + y_abs_base
-        if abs_y % box_px == 0:
-            draw.text((label_x, y - font_size // 2), str(abs_y // box_px + 1),
-                      fill=index_color, font=font)
+        if (abs_y // grid_px) % grid_per_box == 0:
+            cy = y + grid_px // 2
+            draw.text((label_cx, cy), str(abs_y // grid_px + 1),
+                      fill=label_color, font=label_font, anchor="mm")
         y += grid_px
 
     # ── title block — only on top-left sheet ─────────────────────────────

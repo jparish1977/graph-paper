@@ -5,9 +5,24 @@ from tkinter import ttk, filedialog, messagebox, colorchooser
 from PIL import Image, ImageTk
 import threading
 import math
+import json
 import os
 
 from generate_graph_paper import generate_graph_paper, generate_all_sheets
+
+PRESETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dungeon_presets.json")
+
+
+def load_dungeon_presets():
+    if os.path.exists(PRESETS_FILE):
+        with open(PRESETS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_dungeon_presets(presets):
+    with open(PRESETS_FILE, "w", encoding="utf-8") as f:
+        json.dump(presets, f, ensure_ascii=False, indent=2)
 
 # ── page presets ─────────────────────────────────────────────────────────────
 PAGE_PRESETS = {
@@ -50,22 +65,6 @@ TAB_SIZES = {
     "1/2 inch (13mm)": 0.5,
 }
 
-# Fields: (page_w, page_h, notes_in, dungeon_cols, dungeon_rows, start_col, start_row)
-# Sheets wide/tall are computed automatically from page size and dungeon size.
-# Sizes from FAQ are approximate — adjust as needed.
-DUNGEON_PRESETS = {
-    "— select dungeon —": None,
-    "D1–8  (≈26×26) · Letter":           (8.5, 11,   1.5,  26,  26,  2, 11),
-    "D9–14 (≈40×30) · Letter landscape": (11,  8.5,  1.5,  40,  30,  None, None),
-    "D15–18 (≈62×48) · Letter":          (8.5, 11,   1.0,  62,  48,  None, None),
-    "D15–18 (≈62×48) · T125":            (16,  13,   2.0,  62,  48,  None, None),
-    "D19–20 (≈84×110) · Letter":         (8.5, 11,   0.5,  84, 110,  None, None),
-    "D19–20 (≈84×110) · T125":           (22,  28,   2.0,  84, 110,  None, None),
-    "D21   (≈115×115) · Letter":         (8.5, 11,   0.5, 115, 115,  None, None),
-    "D21   (≈115×115) · T125":           (24,  30,   1.0, 115, 115,  None, None),
-    "D22   (≈107×114) · Letter":         (8.5, 11,   0.5, 107, 114,  None, None),
-    "D22   (≈107×114) · T125":           (24,  30,   1.0, 107, 114,  None, None),
-}
 
 PREVIEW_MAX_PX = 1200
 
@@ -102,6 +101,7 @@ class App(tk.Tk):
         self._line_color  = [173, 216, 230]
         self._heavy_color = [173, 216, 230]
         self._index_color = [40,  60,  120]
+        self.dungeon_presets = load_dungeon_presets()
 
         self.columnconfigure(0, weight=0)
         self.columnconfigure(1, weight=1)
@@ -124,10 +124,14 @@ class App(tk.Tk):
         df.pack(fill="x", **pad)
         tk.Label(df, text="Dungeon:", anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
         self.dungeon_var = tk.StringVar(value="— select dungeon —")
-        dng_cb = ttk.Combobox(df, textvariable=self.dungeon_var,
-                               values=list(DUNGEON_PRESETS.keys()), state="readonly", width=34)
-        dng_cb.grid(row=0, column=1, sticky="w", padx=8, pady=3)
-        dng_cb.bind("<<ComboboxSelected>>", self._on_dungeon_preset)
+        self.dng_cb = ttk.Combobox(df, textvariable=self.dungeon_var,
+                                    values=self._preset_names(), state="readonly", width=28)
+        self.dng_cb.grid(row=0, column=1, columnspan=2, sticky="w", padx=8, pady=3)
+        self.dng_cb.bind("<<ComboboxSelected>>", self._on_dungeon_preset)
+        ttk.Button(df, text="Save", width=6, command=self._save_preset).grid(
+            row=1, column=1, sticky="w", padx=8, pady=3)
+        ttk.Button(df, text="Delete", width=6, command=self._delete_preset).grid(
+            row=1, column=2, sticky="w", padx=2, pady=3)
 
         # Page size ───────────────────────────────────────────────────────────
         pf = ttk.LabelFrame(left, text="Page Size", padding=6)
@@ -321,11 +325,60 @@ class App(tk.Tk):
             self.height_var.set(str(dims[1]))
             self.notes_bottom_var.set(str(dims[2]))
 
+    def _preset_names(self):
+        return ["— select dungeon —"] + list(self.dungeon_presets.keys())
+
+    def _refresh_preset_list(self):
+        self.dng_cb["values"] = self._preset_names()
+
+    def _save_preset(self):
+        from tkinter.simpledialog import askstring
+        name = askstring("Save Preset", "Preset name:", initialvalue=self.dungeon_var.get()
+                         if self.dungeon_var.get() != "— select dungeon —" else "")
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        try:
+            p = self._read_params()
+            self.dungeon_presets[name] = {
+                "page_w":      p["width_in"],
+                "page_h":      p["height_in"],
+                "notes_in":    p["notes_bottom_in"],
+                "dungeon_cols": p["dungeon_cols"],
+                "dungeon_rows": p["dungeon_rows"],
+                "start_col":   p["start_col"],
+                "start_row":   p["start_row"],
+            }
+            save_dungeon_presets(self.dungeon_presets)
+            self._refresh_preset_list()
+            self.dungeon_var.set(name)
+            self.status_var.set(f"Preset '{name}' saved.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def _delete_preset(self):
+        name = self.dungeon_var.get()
+        if name == "— select dungeon —" or name not in self.dungeon_presets:
+            return
+        if not messagebox.askyesno("Delete preset", f"Delete '{name}'?"):
+            return
+        del self.dungeon_presets[name]
+        save_dungeon_presets(self.dungeon_presets)
+        self._refresh_preset_list()
+        self.dungeon_var.set("— select dungeon —")
+        self.status_var.set(f"Preset '{name}' deleted.")
+
     def _on_dungeon_preset(self, _=None):
-        vals = DUNGEON_PRESETS.get(self.dungeon_var.get())
+        vals = self.dungeon_presets.get(self.dungeon_var.get())
         if not vals:
             return
-        w, h, notes, dcols, drows, sc, sr = vals
+        w    = vals["page_w"]
+        h    = vals["page_h"]
+        notes = vals["notes_in"]
+        dcols = vals.get("dungeon_cols")
+        drows = vals.get("dungeon_rows")
+        sc    = vals.get("start_col")
+        sr    = vals.get("start_row")
         self.width_var.set(str(w))
         self.height_var.set(str(h))
         self.notes_bottom_var.set(str(notes))
