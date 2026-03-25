@@ -36,6 +36,19 @@ def draw_dashed_line(draw, start, end, color, width=1, dash_length=8, gap_length
         pos += dash_length + gap_length
 
 
+def _draw_rotated_label(img, text, fill, font, cx, cy):
+    """Draw text rotated 90°, centered at (cx, cy), within the image bounds."""
+    tmp = Image.new("RGBA", (1, 1))
+    bbox = ImageDraw.Draw(tmp).textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    txt_img = Image.new("RGBA", (tw + 4, th + 4), (0, 0, 0, 0))
+    ImageDraw.Draw(txt_img).text((2, 2), text, fill=fill, font=font)
+    rotated = txt_img.rotate(90, expand=True)
+    px = max(0, cx - rotated.width // 2)
+    py = max(0, cy - rotated.height // 2)
+    img.paste(rotated, (px, py), rotated)
+
+
 def generate_graph_paper(
     width_in=24, height_in=36, dpi=300,
     line_color=(173, 216, 230), heavy_color=(173, 216, 230),
@@ -154,18 +167,17 @@ def generate_graph_paper(
             draw_dashed_line(draw, (cx, 0), (cx, height_px),
                              cut_color, width=cut_w,
                              dash_length=guide_dash, gap_length=guide_dash)
-            draw.text((margin_px + 2, height_px // 2 - font_size),
-                      "CUT", fill=cut_color, font=font)
-            draw.text((margin_px + 2, height_px // 2),
-                      "TAPE UNDER", fill=cut_color, font=font)
+            # rotate text to fit entirely within the tab strip
+            _draw_rotated_label(img, "CUT / TAPE UNDER", cut_color, font,
+                                cx=margin_px + tab_px // 2, cy=height_px // 2)
 
         if sheet_row > 0:
             cy = margin_px + tab_px
             draw_dashed_line(draw, (0, cy), (width_px, cy),
                              cut_color, width=cut_w,
                              dash_length=guide_dash, gap_length=guide_dash)
-            draw.text((width_px // 2 - font_size * 3, margin_px + 2),
-                      "CUT / TAPE UNDER", fill=cut_color, font=font)
+            draw.text((width_px // 2, margin_px + tab_px // 2),
+                      "CUT / TAPE UNDER", fill=cut_color, font=font, anchor="mm")
 
     # ── index labels ─────────────────────────────────────────────────────
     label_cy = margin_px // 2           # vertical centre for column labels
