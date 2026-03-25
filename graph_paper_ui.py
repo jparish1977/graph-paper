@@ -630,9 +630,10 @@ class App(tk.Tk):
         messagebox.showerror("Error", msg)
 
     def _print(self):
-        import tempfile, subprocess, platform
+        import tempfile, platform
         self.print_btn.config(state="disabled")
         self.status_var.set("Generating for print…")
+        is_win = platform.system() == "Windows"
         def worker():
             try:
                 params = self._read_params()
@@ -640,33 +641,51 @@ class App(tk.Tk):
                 sw, st = params["sheets_wide"], params["sheets_tall"]
                 kw     = {k: v for k, v in params.items()
                           if k not in ("dpi", "sheets_wide", "sheets_tall")}
-                suffix = ".pdf"
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-                    tmp = f.name
                 if sw == 1 and st == 1:
                     img = generate_graph_paper(dpi=dpi, sheets_wide=1, sheets_tall=1, **kw)
-                    img.save(tmp, "PDF", resolution=dpi)
+                    if is_win:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+                            tmp = f.name
+                        img.save(tmp, "PNG")
+                        self.after(0, self._do_print, [tmp])
+                    else:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+                            tmp = f.name
+                        img.save(tmp, "PDF", resolution=dpi)
+                        self.after(0, self._do_print, [tmp])
                 else:
-                    images = [img for _, _, img in generate_all_sheets(sw, st, dpi=dpi, **kw)]
-                    images[0].save(tmp, "PDF", resolution=dpi,
-                                   save_all=True, append_images=images[1:])
-                self.after(0, self._do_print, tmp)
+                    sheets = generate_all_sheets(sw, st, dpi=dpi, **kw)
+                    if is_win:
+                        paths = []
+                        for col, row, img in sheets:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+                                paths.append(f.name)
+                            img.save(paths[-1], "PNG")
+                        self.after(0, self._do_print, paths)
+                    else:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+                            tmp = f.name
+                        images = [img for _, _, img in sheets]
+                        images[0].save(tmp, "PDF", resolution=dpi,
+                                       save_all=True, append_images=images[1:])
+                        self.after(0, self._do_print, [tmp])
             except Exception as e:
                 self.after(0, self._error_print, str(e))
         threading.Thread(target=worker, daemon=True).start()
 
-    def _do_print(self, path):
+    def _do_print(self, paths):
         import subprocess, platform
         self.print_btn.config(state="normal")
         self.status_var.set("Ready.")
         try:
             sys = platform.system()
-            if sys == "Windows":
-                os.startfile(os.path.abspath(path))
-            elif sys == "Darwin":
-                subprocess.run(["lpr", path])
-            else:
-                subprocess.run(["lp", path])
+            for path in paths:
+                if sys == "Windows":
+                    os.startfile(os.path.abspath(path), "print")
+                elif sys == "Darwin":
+                    subprocess.run(["lpr", path])
+                else:
+                    subprocess.run(["lp", path])
         except Exception as e:
             messagebox.showerror("Print error", str(e))
 
