@@ -88,8 +88,10 @@ class App(tk.Tk):
         self.title("Graph Paper Builder — Double Dungeons Edition")
         self.resizable(True, True)
         self.minsize(820, 580)
-        self._preview_job  = None
+        self._preview_job   = None
         self._preview_photo = None
+        self._preview_base  = None   # last rendered PIL image (fit to canvas at zoom=1)
+        self._preview_zoom  = 1.0
         self._last_canvas_size = (0, 0)
 
         self._line_color  = [173, 216, 230]
@@ -275,14 +277,30 @@ class App(tk.Tk):
         right.columnconfigure(0, weight=1)
         right.rowconfigure(1, weight=1)
 
-        tk.Label(right, text="Preview", bg="#f0f0f0", fg="#555").grid(row=0, column=0, pady=(6, 2))
-        self.canvas = tk.Canvas(right, bg="white",
-                                highlightthickness=1, highlightbackground="#ccc")
-        self.canvas.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        tk.Label(right, text="Preview  (scroll to zoom)", bg="#f0f0f0", fg="#555").grid(
+            row=0, column=0, pady=(6, 2))
+
+        cf = tk.Frame(right)
+        cf.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        cf.columnconfigure(0, weight=1)
+        cf.rowconfigure(0, weight=1)
+
+        self.canvas = tk.Canvas(cf, bg="white", highlightthickness=1, highlightbackground="#ccc")
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        vsb = ttk.Scrollbar(cf, orient="vertical",   command=self.canvas.yview)
+        hsb = ttk.Scrollbar(cf, orient="horizontal", command=self.canvas.xview)
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        self.canvas.config(xscrollcommand=hsb.set, yscrollcommand=vsb.set)
+
         self._draw_placeholder()
         self.preview_btn = ttk.Button(right, text="Refresh Preview", command=self._schedule_preview)
         self.preview_btn.grid(row=2, column=0, pady=(4, 8))
         self.canvas.bind("<Configure>", self._on_canvas_resize)
+        self.canvas.bind("<MouseWheel>",  self._on_scroll)   # Windows / macOS
+        self.canvas.bind("<Button-4>",    self._on_scroll)   # Linux scroll up
+        self.canvas.bind("<Button-5>",    self._on_scroll)   # Linux scroll down
 
     # ── traces ────────────────────────────────────────────────────────────────
     def _wire_traces(self):
@@ -507,6 +525,7 @@ class App(tk.Tk):
 
     # ── preview ───────────────────────────────────────────────────────────────
     def _schedule_preview(self, delay=600):
+        self._preview_zoom = 1.0
         if self._preview_job:
             self.after_cancel(self._preview_job)
         self._preview_job = self.after(delay, self._run_preview)
@@ -564,12 +583,32 @@ class App(tk.Tk):
         return self._fit(composite, canvas_w, canvas_h)
 
     def _show_preview(self, img, canvas_w, canvas_h):
+        self._preview_base = img
+        self._preview_zoom = 1.0
+        self._apply_zoom()
+        self.preview_btn.config(state="normal")
+        self.status_var.set("Ready.")
+
+    def _apply_zoom(self):
+        if self._preview_base is None:
+            return
+        img = self._preview_base
+        if self._preview_zoom != 1.0:
+            nw = max(1, int(img.width  * self._preview_zoom))
+            nh = max(1, int(img.height * self._preview_zoom))
+            img = img.resize((nw, nh), Image.LANCZOS)
         photo = ImageTk.PhotoImage(img)
         self._preview_photo = photo
         self.canvas.delete("all")
-        self.canvas.create_image(canvas_w // 2, canvas_h // 2, anchor="center", image=photo)
-        self.preview_btn.config(state="normal")
-        self.status_var.set("Ready.")
+        self.canvas.config(scrollregion=(0, 0, img.width, img.height))
+        self.canvas.create_image(img.width // 2, img.height // 2, anchor="center", image=photo)
+
+    def _on_scroll(self, event):
+        if event.num == 4 or (hasattr(event, "delta") and event.delta > 0):
+            self._preview_zoom = min(8.0, self._preview_zoom * 1.15)
+        else:
+            self._preview_zoom = max(0.2, self._preview_zoom / 1.15)
+        self._apply_zoom()
 
     def _preview_error(self, msg, canvas_w, canvas_h):
         self.canvas.delete("all")
