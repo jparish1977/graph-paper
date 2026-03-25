@@ -723,6 +723,7 @@ function loadPresets() {
   refreshPresetList();
 
   // If served via HTTP, fetch JSON to pick up any updates to the file
+  if (location.protocol === 'file:') return;
   fetch('dungeon_presets.json')
     .then(r => r.json())
     .then(data => {
