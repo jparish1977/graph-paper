@@ -177,7 +177,7 @@ class App(tk.Tk):
         tf.pack(fill="x", **pad)
 
         self.title_vars = []
-        defaults = ["Ginger Plays Games", "Double Dungeons", "{size}", "{dpi}"]
+        defaults = ["Ginger Plays Games", "Double Dungeons", "", ""]
         hints    = ["Line 1", "Line 2", "Line 3 ({size} = auto)", "Line 4 ({dpi} = auto)"]
         for i, (d, h) in enumerate(zip(defaults, hints)):
             tk.Label(tf, text=f"{h}:", anchor="w").grid(row=i, column=0, sticky="w", padx=8, pady=2)

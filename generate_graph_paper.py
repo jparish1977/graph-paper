@@ -193,13 +193,19 @@ def generate_graph_paper(
     if sheet_col == 0 and sheet_row == 0:
         block_w = box_px * 2
         block_h = box_px
-        draw.rectangle([margin_px, margin_px,
-                        margin_px + block_w, margin_px + block_h],
-                       outline=(0, 0, 0), width=max(1, heavy_thickness))
-        text_y = margin_px + pad_inner
-        for line in title_lines:
-            draw.text((margin_px + pad_inner, text_y), line,
-                      fill=(0, 0, 0), font=title_font)
+        radius = max(2, box_px // 8)
+        draw.rounded_rectangle([margin_px, margin_px,
+                                 margin_px + block_w, margin_px + block_h],
+                                radius=radius, outline=(0, 0, 0),
+                                width=max(1, heavy_thickness))
+        block_cx = margin_px + block_w // 2
+        active_lines = [l for l in title_lines if l.strip()]
+        n_active = max(1, len(active_lines))
+        total_text_h = n_active * title_font_size + (n_active - 1) * line_gap
+        text_y = margin_px + (block_h - total_text_h) // 2
+        for line in active_lines:
+            draw.text((block_cx, text_y + title_font_size // 2), line,
+                      fill=(0, 0, 0), font=title_font, anchor="mm")
             text_y += title_font_size + line_gap
 
     # ── sheet label (bottom-right, inside margin) ─────────────────────────
