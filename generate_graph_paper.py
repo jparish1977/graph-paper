@@ -75,6 +75,20 @@ def generate_graph_paper(
     dash_length = max(4, int(dpi * 0.045))
     gap_length  = dash_length
 
+    def seam_tabs(seam_top, seam_bot):
+        """Return list of (gap_top, tab_top, tab_bot, gap_bot) in px."""
+        seam_len   = seam_bot - seam_top
+        period     = max(grid_px * 4, int(box_px * 1.2))
+        n_periods  = max(2, round(seam_len / period))
+        act_period = seam_len / n_periods
+        tab_h      = round(act_period * 0.5)
+        tabs = []
+        for i in range(n_periods):
+            gap_top = seam_top + i * act_period
+            tab_top = gap_top + round((act_period - tab_h) / 2)
+            tabs.append((gap_top, tab_top, tab_top + tab_h, gap_top + act_period))
+        return tabs
+
     if font_size is None:
         font_size = max(1, int(box_px * 0.18))
     font = _scaled_font(font_size)
@@ -126,11 +140,28 @@ def generate_graph_paper(
     slot_fill = (220, 255, 220)
     if tab_px > 0:
         if sheet_col > 0:
-            draw.rectangle([margin_px, margin_px,
-                            margin_px + tab_px, grid_bottom], fill=tab_fill)
+            if tab_style == "tape":
+                draw.rectangle([margin_px, margin_px,
+                                margin_px + tab_px, grid_bottom], fill=tab_fill)
+            else:
+                # shade only the gap sections (tabs stay, gaps get cut away)
+                seam_top = margin_px + tab_px if sheet_row > 0 else margin_px
+                for gt, tt, tb, gb in seam_tabs(seam_top, grid_bottom):
+                    if int(tt) > int(gt):
+                        draw.rectangle([margin_px, int(gt), margin_px + tab_px, int(tt)], fill=tab_fill)
+                    if int(gb) > int(tb):
+                        draw.rectangle([margin_px, int(tb), margin_px + tab_px, int(gb)], fill=tab_fill)
         if sheet_row > 0:
-            draw.rectangle([margin_px, margin_px,
-                            width_px - margin_px, margin_px + tab_px], fill=tab_fill)
+            if tab_style == "tape":
+                draw.rectangle([margin_px, margin_px,
+                                width_px - margin_px, margin_px + tab_px], fill=tab_fill)
+            else:
+                seam_left = margin_px + tab_px if sheet_col > 0 else margin_px
+                for gl, tl, tr, gr in seam_tabs(seam_left, width_px - margin_px):
+                    if int(tl) > int(gl):
+                        draw.rectangle([int(gl), margin_px, int(tl), margin_px + tab_px], fill=tab_fill)
+                    if int(gr) > int(tr):
+                        draw.rectangle([int(tr), margin_px, int(gr), margin_px + tab_px], fill=tab_fill)
         if tab_style == "insert":
             if sheet_col < sheets_wide - 1:
                 draw.rectangle([width_px - margin_px - tab_px, margin_px,
@@ -171,20 +202,6 @@ def generate_graph_paper(
         slot_color = (30, 140, 30)
         cut_w      = max(1, heavy_thickness)
         guide_dash = max(4, dpi // 15)
-
-        def seam_tabs(seam_top, seam_bot):
-            """Return list of (gap_top, tab_top, tab_bot, gap_bot) in px."""
-            seam_len   = seam_bot - seam_top
-            period     = max(grid_px * 4, int(box_px * 1.2))
-            n_periods  = max(2, round(seam_len / period))
-            act_period = seam_len / n_periods
-            tab_h      = round(act_period * 0.5)
-            tabs = []
-            for i in range(n_periods):
-                gap_top = seam_top + i * act_period
-                tab_top = gap_top + round((act_period - tab_h) / 2)
-                tabs.append((gap_top, tab_top, tab_top + tab_h, gap_top + act_period))
-            return tabs
 
         if tab_style == "tape":
             if sheet_col > 0:

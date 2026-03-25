@@ -312,12 +312,56 @@ function generateGraphPaper(canvas, p) {
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, widthPx, heightPx);
 
+  // helper: evenly-spaced tab positions along a seam
+  function seamTabs(seamTop, seamBot) {
+    const seamLen   = seamBot - seamTop;
+    const period    = Math.max(gridPx * 4, Math.round(boxPx * 1.2));
+    const nPeriods  = Math.max(2, Math.round(seamLen / period));
+    const actPeriod = seamLen / nPeriods;
+    const tabH      = Math.round(actPeriod * 0.5);
+    const tabs = [];
+    for (let i = 0; i < nPeriods; i++) {
+      const gapTop = seamTop + i * actPeriod;
+      const tabTop = gapTop + Math.round((actPeriod - tabH) / 2);
+      tabs.push({ gapTop, tabTop, tabBot: tabTop + tabH, gapBot: gapTop + actPeriod });
+    }
+    return tabs;
+  }
+
   // tab shading — left/top strip on sheets that go under neighbours
   if (tabPx > 0) {
-    ctx.fillStyle = 'rgb(210,230,255)';
-    if (sheetCol > 0) ctx.fillRect(marginPx, marginPx, tabPx, gridBottom - marginPx);
-    if (sheetRow > 0) ctx.fillRect(marginPx, marginPx, widthPx - 2*marginPx, tabPx);
-    // insert mode: shade the slot zone on mating edges too (right / bottom)
+    if (sheetCol > 0) {
+      if (tabStyle === 'tape') {
+        ctx.fillStyle = 'rgb(210,230,255)';
+        ctx.fillRect(marginPx, marginPx, tabPx, gridBottom - marginPx);
+      } else {
+        // shade only gap sections (tabs stay attached, gaps get cut away)
+        const seamTop = sheetRow > 0 ? marginPx + tabPx : marginPx;
+        ctx.fillStyle = 'rgb(210,230,255)';
+        for (const { gapTop, tabTop, tabBot, gapBot } of seamTabs(seamTop, gridBottom)) {
+          if (Math.round(tabTop) > Math.round(gapTop))
+            ctx.fillRect(marginPx, Math.round(gapTop), tabPx, Math.round(tabTop) - Math.round(gapTop));
+          if (Math.round(gapBot) > Math.round(tabBot))
+            ctx.fillRect(marginPx, Math.round(tabBot), tabPx, Math.round(gapBot) - Math.round(tabBot));
+        }
+      }
+    }
+    if (sheetRow > 0) {
+      if (tabStyle === 'tape') {
+        ctx.fillStyle = 'rgb(210,230,255)';
+        ctx.fillRect(marginPx, marginPx, widthPx - 2*marginPx, tabPx);
+      } else {
+        const seamLeft = sheetCol > 0 ? marginPx + tabPx : marginPx;
+        ctx.fillStyle = 'rgb(210,230,255)';
+        for (const { gapTop: gL, tabTop: tL, tabBot: tR, gapBot: gR } of seamTabs(seamLeft, widthPx - marginPx)) {
+          if (Math.round(tL) > Math.round(gL))
+            ctx.fillRect(Math.round(gL), marginPx, Math.round(tL) - Math.round(gL), tabPx);
+          if (Math.round(gR) > Math.round(tR))
+            ctx.fillRect(Math.round(tR), marginPx, Math.round(gR) - Math.round(tR), tabPx);
+        }
+      }
+    }
+    // insert mode: shade slot zone on mating edges
     if (tabStyle === 'insert') {
       ctx.fillStyle = 'rgb(220,255,220)';
       if (sheetCol < sheetsWide - 1) ctx.fillRect(widthPx - marginPx - tabPx, marginPx, tabPx, gridBottom - marginPx);
@@ -350,23 +394,6 @@ function generateGraphPaper(canvas, p) {
     const slotCol = cssRgb([30, 140, 30]);
     const cutW    = Math.max(1, heavyThickness);
     const gDash   = Math.max(4, Math.round(dpi / 15));
-
-    // Compute evenly-spaced tab positions along a seam of given extent.
-    // Returns array of {tabTop, tabBot, gapTop, gapBot} in px.
-    function seamTabs(seamTop, seamBot) {
-      const seamLen   = seamBot - seamTop;
-      const period    = Math.max(gridPx * 4, Math.round(boxPx * 1.2));
-      const nPeriods  = Math.max(2, Math.round(seamLen / period));
-      const actPeriod = seamLen / nPeriods;
-      const tabH      = Math.round(actPeriod * 0.5);
-      const tabs = [];
-      for (let i = 0; i < nPeriods; i++) {
-        const gapTop = seamTop + i * actPeriod;
-        const tabTop = gapTop + Math.round((actPeriod - tabH) / 2);
-        tabs.push({ gapTop, tabTop, tabBot: tabTop + tabH, gapBot: gapTop + actPeriod });
-      }
-      return tabs;
-    }
 
     if (tabStyle === 'tape') {
       // ── original tape-under guides ────────────────────────────────────────
