@@ -80,7 +80,7 @@ def generate_graph_paper(
 
     label_font_size = max(1, grid_px // 2)
     label_font  = _scaled_font(label_font_size)
-    label_color = (180, 180, 180)
+    label_color = (225, 225, 225)
 
     # title block font: fit n_lines inside one box height
     if title_lines is None:
