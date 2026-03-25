@@ -32,6 +32,8 @@ bash install.sh
 python3 graph_paper_ui.py
 ```
 
+> `install.sh` installs `python3-pil.imagetk` alongside Pillow — this is required for the image preview to work in the UI and isn't included with pip's Pillow alone.
+
 ### Windows
 
 ```
