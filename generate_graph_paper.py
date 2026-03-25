@@ -249,6 +249,35 @@ def generate_graph_paper(
         if sy0 <= by <= sy1: hline(by, lx, rx)
         if sx0 <= lx <= sx1: vline(lx, ty, by)
         if sx0 <= rx <= sx1: vline(rx, ty, by)
+
+        # ── dungeon-relative labels ───────────────────────────────────────
+        dlabel_color = index_color
+
+        # column letters just above the top border
+        if sy0 <= ty <= sy1:
+            ly = ty - grid_px // 2
+            if ly >= 0:
+                x = lx
+                while x < rx:
+                    if sx0 <= x + grid_px // 2 <= sx1:
+                        col_idx = (x - lx) // grid_px
+                        draw.text((x + grid_px // 2, ly),
+                                  index_label_from_num(col_idx),
+                                  fill=dlabel_color, font=label_font, anchor="mm")
+                    x += grid_px
+
+        # row numbers just left of the left border
+        if sx0 <= lx <= sx1:
+            lx2 = lx - grid_px // 2
+            if lx2 >= 0:
+                y = ty
+                while y < by:
+                    if sy0 <= y + grid_px // 2 <= sy1:
+                        row_idx = (y - ty) // grid_px + 1
+                        draw.text((lx2, y + grid_px // 2),
+                                  str(row_idx),
+                                  fill=dlabel_color, font=label_font, anchor="mm")
+                    y += grid_px
     else:
         dung_x_off = 0
         dung_y_off = 0
