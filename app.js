@@ -37,15 +37,64 @@ let dungeonPresets = {};
 let previewScheduled = false;
 let previewCol = null, previewRow = null;
 
+// ── Drawing constants ────────────────────────────────────────────────────────
+/* eslint-disable no-magic-numbers */
+const DEFAULTS = {
+  WIDTH_IN: 8.5, HEIGHT_IN: 11, DPI: 150,
+  LINE_COLOR:  [173, 216, 230],
+  HEAVY_COLOR: [173, 216, 230],
+  INDEX_COLOR: [40, 60, 120],
+  LABEL_COLOR: [220, 220, 220],
+  LINE_THICKNESS: 1, HEAVY_THICKNESS: 2,
+  MARGIN_IN: 0.25, GRID_SIZE_IN: 0.25, BOX_CELLS: 4, TAB_IN: 0.25,
+};
+
+const RATIOS = {
+  DASH_LEN: 0.045,         // dash length relative to DPI
+  AUTO_FONT: 0.18,          // font size relative to box
+  TITLE_FONT: 0.22,         // title font relative to box
+  LABEL_FONT_MIN: 6,        // minimum label font size px
+  PAD_INNER_DIV: 12,        // inner padding = boxPx / this
+  LINE_GAP_DIV: 20,         // line gap = boxPx / this
+  DASH_MIN: 4,              // minimum dash length px
+  ROUND_CORNER_DIV: 8,      // corner radius = boxPx / this
+  SLOT_FONT_SCALE: 1.2,     // slot label font multiplier
+  DUNGEON_LABEL_OFFSET: 0.5,// label offset in grid units
+};
+
+const CUT_COLOR  = [200, 40, 40];
+const SLOT_COLOR = [40, 120, 40];
+const TAB_FILL   = 'rgba(30, 140, 30, 0.08)';
+const SLOT_FILL  = 'rgba(200, 40, 40, 0.06)';
+const TAB_SHADE  = 'rgba(173, 216, 230, 0.18)';
+const NOTES_COLOR = [60, 60, 60];
+
+// Character code constants
+const CHAR_CODE_A = 65;
+const ALPHABET_SIZE = 26;
+const HEX_SLICE_1 = 1;
+const HEX_SLICE_2 = 3;
+const HEX_SLICE_3 = 5;
+const HEX_SLICE_4 = 7;
+const HEX_BASE = 16;
+/* eslint-enable no-magic-numbers */
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function indexLabelFromNum(n) {
   let s = '';
-  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  do {
+    s = String.fromCharCode(CHAR_CODE_A + (n % ALPHABET_SIZE)) + s;
+    n = Math.floor(n / ALPHABET_SIZE) - 1;
+  } while (n >= 0);
   return s;
 }
 
 function hexToRgb(hex) {
-  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+  return [
+    parseInt(hex.slice(HEX_SLICE_1, HEX_SLICE_2), HEX_BASE),
+    parseInt(hex.slice(HEX_SLICE_2, HEX_SLICE_3), HEX_BASE),
+    parseInt(hex.slice(HEX_SLICE_3, HEX_SLICE_4), HEX_BASE),
+  ];
 }
 
 function cssRgb(rgb) { return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; }
@@ -66,15 +115,23 @@ function roundRectPath(ctx, x, y, w, h, r) {
 // ── Core renderer ─────────────────────────────────────────────────────────────
 function generateGraphPaper(canvas, p) {
   const {
-    widthIn=8.5, heightIn=11, dpi=150,
-    lineColor=[173,216,230], heavyColor=[173,216,230], indexColor=[40,60,120],
-    lineThickness=1, heavyThickness=2,
-    marginIn=0.25, gridSizeIn=0.25, boxCells=4,
-    fontSize=null, dashed=true, titleLines=null,
-    sheetCol=0, sheetRow=0, sheetsWide=1, sheetsTall=1, tabIn=0.25,
-    notesBottomIn=0, startCol=null, startRow=null,
-    dungeonCols=null, dungeonRows=null,
-    tabStyle='tape',
+    widthIn  = DEFAULTS.WIDTH_IN,
+    heightIn = DEFAULTS.HEIGHT_IN,
+    dpi      = DEFAULTS.DPI,
+    lineColor     = DEFAULTS.LINE_COLOR,
+    heavyColor    = DEFAULTS.HEAVY_COLOR,
+    indexColor    = DEFAULTS.INDEX_COLOR,
+    lineThickness = DEFAULTS.LINE_THICKNESS,
+    heavyThickness = DEFAULTS.HEAVY_THICKNESS,
+    marginIn  = DEFAULTS.MARGIN_IN,
+    gridSizeIn = DEFAULTS.GRID_SIZE_IN,
+    boxCells  = DEFAULTS.BOX_CELLS,
+    fontSize  = null, dashed = true, titleLines = null,
+    sheetCol = 0, sheetRow = 0, sheetsWide = 1, sheetsTall = 1,
+    tabIn = DEFAULTS.TAB_IN,
+    notesBottomIn = 0, startCol = null, startRow = null,
+    dungeonCols = null, dungeonRows = null,
+    tabStyle = 'tape',
   } = p;
 
   const widthPx  = Math.round(widthIn  * dpi);
@@ -85,13 +142,13 @@ function generateGraphPaper(canvas, p) {
   const boxPx    = gridPx * gridPerBox;
   const tabPx    = (sheetsWide > 1 || sheetsTall > 1) ? Math.round(tabIn * dpi) : 0;
   const notesPx  = (sheetRow === sheetsTall - 1) ? Math.round(notesBottomIn * dpi) : 0;
-  const dashLen  = Math.max(4, Math.round(dpi * 0.045));
+  const dashLen  = Math.max(RATIOS.DASH_MIN, Math.round(dpi * RATIOS.DASH_LEN));
 
-  const autoFontSize  = fontSize || Math.max(1, Math.round(boxPx * 0.18));
-  const labelFontSize = Math.max(6, Math.floor(gridPx / 2));
-  const labelColor    = [220, 220, 220];
-  const padInner      = Math.max(2, Math.round(boxPx / 12));
-  const lineGap       = Math.max(1, Math.round(boxPx / 20));
+  const autoFontSize  = fontSize || Math.max(1, Math.round(boxPx * RATIOS.AUTO_FONT));
+  const labelFontSize = Math.max(RATIOS.LABEL_FONT_MIN, Math.floor(gridPx / 2));
+  const labelColor    = DEFAULTS.LABEL_COLOR;
+  const padInner      = Math.max(2, Math.round(boxPx / RATIOS.PAD_INNER_DIV));
+  const lineGap       = Math.max(1, Math.round(boxPx / RATIOS.LINE_GAP_DIV));
   const nLines        = Math.max(1, (titleLines||[]).length);
   const maxTf         = Math.max(1, Math.round((boxPx - padInner) / nLines) - lineGap);
   const titleFontSize = Math.min(Math.max(1, Math.round(boxPx * 0.22)), maxTf);
