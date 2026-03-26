@@ -1,4 +1,5 @@
 // ── Constants ────────────────────────────────────────────────────────────────
+/* eslint-disable no-magic-numbers -- page preset data values */
 const PAGE_PRESETS = {
   'Letter (8.5×11)':            [8.5,   11,    1.5],
   'Letter Landscape (11×8.5)':  [11,    8.5,   1.0],
@@ -32,6 +33,7 @@ const BUILTIN_PRESETS = {
   "D22   (\u2248107\u00d7114) \u00b7 Letter":                {"page_w":8.5,"page_h":11, "notes_in":0.5,"dungeon_cols":107,"dungeon_rows":114,"start_col":null,"start_row":null},
   "D22   (\u2248107\u00d7114) \u00b7 T125":                  {"page_w":24, "page_h":30, "notes_in":1.0,"dungeon_cols":107,"dungeon_rows":114,"start_col":null,"start_row":null},
 };
+/* eslint-enable no-magic-numbers */
 
 let dungeonPresets = {};
 let previewScheduled = false;
@@ -46,7 +48,7 @@ const DEFAULTS = {
   INDEX_COLOR: [40, 60, 120],
   LABEL_COLOR: [220, 220, 220],
   LINE_THICKNESS: 1, HEAVY_THICKNESS: 2,
-  MARGIN_IN: 0.25, GRID_SIZE_IN: 0.25, BOX_CELLS: 4, TAB_IN: 0.25,
+  MARGIN_IN: 0.25, GRID_SIZE_IN: 0.25, BOX_CELLS: 4, TAB_IN: 0.25, NOTES_HEIGHT: 1.5,
 };
 
 const RATIOS = {
@@ -62,12 +64,24 @@ const RATIOS = {
   DUNGEON_LABEL_OFFSET: 0.5,// label offset in grid units
 };
 
-const CUT_COLOR  = [200, 40, 40];
-const SLOT_COLOR = [40, 120, 40];
-const TAB_FILL   = 'rgba(30, 140, 30, 0.08)';
 const SLOT_FILL  = 'rgba(200, 40, 40, 0.06)';
 const TAB_SHADE  = 'rgba(173, 216, 230, 0.18)';
 const NOTES_COLOR = [60, 60, 60];
+
+const UI = {
+  PREVIEW_DPI: 150,
+  PREVIEW_DELAY_MS: 250,
+  DOWNLOAD_DPI: 150,
+  SHEET_DELAY_MS: 10,
+  PRINT_DELAY_MS: 60,
+  CANVAS_MIN_W: 30, CANVAS_MAX_W: 150,
+  CANVAS_MIN_H: 20, CANVAS_MAX_H: 96,
+  CANVAS_DPI: 72,
+  DUNGEON_MIN_SIZE: 32,
+  CUT_GUIDE_COLOR: [200, 40, 40],
+  SLOT_GUIDE_COLOR: [30, 140, 30],
+  CUT_DASH_DIV: 15,
+};
 
 // Character code constants
 const CHAR_CODE_A = 65;
@@ -379,11 +393,9 @@ function drawDungeonBorder(ctx, g) {
     const localSy = g.marginPx + dungOriginY + (absSy - g.yAbsBase);
     if (g.marginPx <= localSx && localSx < g.widthPx - g.marginPx &&
         g.marginPx <= localSy && localSy < g.gridBottom) {
-      /* eslint-disable no-magic-numbers */
       ctx.fillStyle = 'rgb(255,255,180)';
       ctx.fillRect(localSx, localSy, g.gridPx, g.gridPx);
       ctx.fillStyle = 'rgb(180,120,0)';
-      /* eslint-enable no-magic-numbers */
       ctx.font = `${g.autoFontSize}px monospace`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       ctx.fillText('S', localSx + 2, localSy + 1);
@@ -396,7 +408,7 @@ function generateGraphPaper(canvas, p) {
   const g = buildGeometry(p);
   // Destructure for the cut guides section (kept inline due to complexity)
   const {
-    widthPx, heightPx, marginPx, gridPx, boxPx, tabPx, dashLen,
+    widthPx, heightPx, marginPx, tabPx,
     autoFontSize, gridBottom, heavyThickness, dpi,
     sheetCol, sheetRow, sheetsWide, sheetsTall, tabStyle,
   } = g;
@@ -414,10 +426,10 @@ function generateGraphPaper(canvas, p) {
 
   // ── cut / insert guides ───────────────────────────────────────────────────
   if (tabPx > 0) {
-    const cutCol  = cssRgb([200, 40, 40]);
-    const slotCol = cssRgb([30, 140, 30]);
+    const cutCol  = cssRgb(UI.CUT_GUIDE_COLOR);
+    const slotCol = cssRgb(UI.SLOT_GUIDE_COLOR);
     const cutW    = Math.max(1, heavyThickness);
-    const gDash   = Math.max(4, Math.round(dpi / 15));
+    const gDash   = Math.max(RATIOS.DASH_MIN, Math.round(dpi / UI.CUT_DASH_DIV));
 
     if (tabStyle === 'tape') {
       if (sheetCol > 0) {
@@ -546,12 +558,12 @@ function readParams(dpiOverride) {
   const notesEnabled = document.getElementById('notes-enabled').checked;
   const fsRaw = document.getElementById('font-size').value.trim();
   return {
-    widthIn:       parseFloat(document.getElementById('width').value)          || 8.5,
-    heightIn:      parseFloat(document.getElementById('height').value)         || 11,
-    dpi:           dpiOverride || parseInt(document.getElementById('dpi').value) || 150,
-    marginIn:      parseFloat(document.getElementById('margin').value)         || 0.25,
-    gridSizeIn:    parseFloat(document.getElementById('grid-size').value)      || 0.25,
-    boxCells:      parseInt(document.getElementById('box-cells').value)        || 4,
+    widthIn:       parseFloat(document.getElementById('width').value)          || DEFAULTS.WIDTH_IN,
+    heightIn:      parseFloat(document.getElementById('height').value)         || DEFAULTS.HEIGHT_IN,
+    dpi:           dpiOverride || parseInt(document.getElementById('dpi').value) || DEFAULTS.DPI,
+    marginIn:      parseFloat(document.getElementById('margin').value)         || DEFAULTS.MARGIN_IN,
+    gridSizeIn:    parseFloat(document.getElementById('grid-size').value)      || DEFAULTS.GRID_SIZE_IN,
+    boxCells:      parseInt(document.getElementById('box-cells').value)        || DEFAULTS.BOX_CELLS,
     lineThickness: parseInt(document.getElementById('line-thickness').value)   || 1,
     heavyThickness:parseInt(document.getElementById('heavy-thickness').value)  || 2,
     dashed:        document.getElementById('dashed').checked,
@@ -566,12 +578,12 @@ function readParams(dpiOverride) {
     ],
     sheetsWide:    parseInt(document.getElementById('sheets-wide').value)      || 1,
     sheetsTall:    parseInt(document.getElementById('sheets-tall').value)      || 1,
-    tabIn:         parseFloat(document.getElementById('tab-size').value)       || 0.25,
+    tabIn:         parseFloat(document.getElementById('tab-size').value)       || DEFAULTS.TAB_IN,
     dungeonCols:   parseInt(document.getElementById('dung-cols').value)        || null,
     dungeonRows:   parseInt(document.getElementById('dung-rows').value)        || null,
     startCol:      parseInt(document.getElementById('start-col').value)        || null,
     startRow:      parseInt(document.getElementById('start-row').value)        || null,
-    notesBottomIn: notesEnabled ? (parseFloat(document.getElementById('notes-height').value) || 1.5) : 0,
+    notesBottomIn: notesEnabled ? (parseFloat(document.getElementById('notes-height').value) || DEFAULTS.NOTES_HEIGHT) : 0,
     fontSize:      fsRaw ? parseInt(fsRaw) : null,
     tabStyle:      document.getElementById('tab-style').value,
   };
@@ -591,12 +603,12 @@ function refreshPreview() {
     previewRow = Math.min(previewRow, sheetsTall - 1);
   }
 
-  const maxW = wrap.clientWidth  - 32;
-  const maxH = wrap.clientHeight - 32;
+  const maxW = wrap.clientWidth  - UI.DUNGEON_MIN_SIZE;
+  const maxH = wrap.clientHeight - UI.DUNGEON_MIN_SIZE;
 
   if (!multi || previewCol !== null) {
     const col = previewCol ?? 0, row = previewRow ?? 0;
-    const dpi = Math.max(30, Math.min(150, Math.floor(Math.min(maxW / params.widthIn, maxH / params.heightIn))));
+    const dpi = Math.max(UI.CANVAS_MIN_W, Math.min(UI.CANVAS_MAX_W, Math.floor(Math.min(maxW / params.widthIn, maxH / params.heightIn))));
     generateGraphPaper(canvas, { ...params, dpi, sheetCol: col, sheetRow: row });
     const name = multi ? `Sheet ${indexLabelFromNum(col)}${row + 1}` : '';
     document.getElementById('preview-header').textContent = multi ? `Preview — ${name} (click composite for overview)` : 'Preview';
@@ -604,10 +616,10 @@ function refreshPreview() {
   } else {
     const scale  = Math.min((maxW - gap*(sheetsWide-1)) / (sheetsWide * params.widthIn),
                             (maxH - gap*(sheetsTall-1)) / (sheetsTall * params.heightIn));
-    const dpi = Math.max(20, Math.min(96, Math.floor(scale)));
+    const dpi = Math.max(UI.CANVAS_MIN_H, Math.min(UI.CANVAS_MAX_H, Math.floor(scale)));
     const sheetW = Math.round(params.widthIn  * dpi);
     const sheetH = Math.round(params.heightIn * dpi);
-    const gapPx  = Math.round(gap * (dpi / 72));
+    const gapPx  = Math.round(gap * (dpi / UI.CANVAS_DPI));
 
     canvas.width  = sheetsWide * sheetW + (sheetsWide - 1) * gapPx;
     canvas.height = sheetsTall * sheetH + (sheetsTall - 1) * gapPx;
@@ -632,6 +644,7 @@ function refreshPreview() {
     `${params.widthIn}×${params.heightIn} in — ${sheetsWide}×${sheetsTall} sheet(s) — ${params.dpi} DPI`;
 }
 
+// eslint-disable-next-line no-unused-vars -- called from HTML
 function prevSheet() {
   const { sheetsWide, sheetsTall } = readParams();
   const multi = sheetsWide > 1 || sheetsTall > 1;
@@ -648,6 +661,7 @@ function prevSheet() {
   refreshPreview();
 }
 
+// eslint-disable-next-line no-unused-vars -- called from HTML
 function nextSheet() {
   const { sheetsWide, sheetsTall } = readParams();
   const multi = sheetsWide > 1 || sheetsTall > 1;
@@ -668,15 +682,16 @@ function schedulePreview() {
   previewCol = null; previewRow = null;
   if (previewScheduled) return;
   previewScheduled = true;
-  setTimeout(() => { previewScheduled = false; refreshPreview(); }, 250);
+  setTimeout(() => { previewScheduled = false; refreshPreview(); }, UI.PREVIEW_DELAY_MS);
 }
 
 // ── Generate & Save ───────────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars -- called from HTML
 async function generateAndSave() {
   const params = readParams();
   const { sheetsWide, sheetsTall } = params;
   setStatus('Generating…');
-  await new Promise(r => setTimeout(r, 10));
+  await new Promise(r => setTimeout(r, UI.SHEET_DELAY_MS));
   try {
     const off = document.createElement('canvas');
     if (sheetsWide === 1 && sheetsTall === 1) {
@@ -688,7 +703,7 @@ async function generateAndSave() {
         for (let col = 0; col < sheetsWide; col++) {
           generateGraphPaper(off, { ...params, sheetCol: col, sheetRow: row });
           downloadCanvas(off, `graph_paper_${indexLabelFromNum(col)}${row+1}.png`);
-          await new Promise(r => setTimeout(r, 60));
+          await new Promise(r => setTimeout(r, UI.PRINT_DELAY_MS));
         }
       }
       setStatus(`Saved ${sheetsWide * sheetsTall} sheets.`);
@@ -704,11 +719,12 @@ function downloadCanvas(canvas, filename) {
 }
 
 // ── Print ─────────────────────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars -- called from HTML
 async function printSheets() {
   const params = readParams();
   const { sheetsWide, sheetsTall, widthIn, heightIn } = params;
   setStatus('Preparing print…');
-  await new Promise(r => setTimeout(r, 10));
+  await new Promise(r => setTimeout(r, UI.SHEET_DELAY_MS));
 
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><title>Graph Paper</title><style>
@@ -796,6 +812,7 @@ function onDungeonPreset() {
   schedulePreview();
 }
 
+// eslint-disable-next-line no-unused-vars -- called from HTML
 function savePreset() {
   const cur  = document.getElementById('dng-select').value;
   const name = prompt('Preset name:', cur || '');
@@ -816,6 +833,7 @@ function savePreset() {
   setStatus(`Saved preset "${name.trim()}".`);
 }
 
+// eslint-disable-next-line no-unused-vars -- called from HTML
 function deletePreset() {
   const name = document.getElementById('dng-select').value;
   if (!name || !dungeonPresets[name]) return;
@@ -895,7 +913,7 @@ function init() {
 
   loadPresets();
   window.addEventListener('resize', schedulePreview);
-  setTimeout(refreshPreview, 150);
+  setTimeout(refreshPreview, UI.PREVIEW_DPI);
 }
 
 document.addEventListener('DOMContentLoaded', init);
