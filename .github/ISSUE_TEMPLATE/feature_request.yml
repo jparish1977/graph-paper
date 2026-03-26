@@ -2,6 +2,17 @@ name: Feature Request
 description: Something should exist
 labels: ["enhancement"]
 body:
+  - type: dropdown
+    id: version
+    attributes:
+      label: Which version?
+      options:
+        - Python (Tkinter UI)
+        - JavaScript (browser)
+        - PHP/GD
+        - All versions
+    validations:
+      required: true
   - type: textarea
     id: what
     attributes:

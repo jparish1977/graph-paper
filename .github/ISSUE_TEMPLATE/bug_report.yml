@@ -2,6 +2,16 @@ name: Bug Report
 description: Something is broken
 labels: ["bug"]
 body:
+  - type: dropdown
+    id: version
+    attributes:
+      label: Which version?
+      options:
+        - Python (Tkinter UI)
+        - JavaScript (browser)
+        - PHP/GD
+    validations:
+      required: true
   - type: textarea
     id: what-happened
     attributes:
