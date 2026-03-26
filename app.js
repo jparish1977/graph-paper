@@ -112,8 +112,8 @@ function roundRectPath(ctx, x, y, w, h, r) {
   }
 }
 
-// ── Core renderer ─────────────────────────────────────────────────────────────
-function generateGraphPaper(canvas, p) {
+// ── Geometry builder ──────────────────────────────────────────────────────────
+function buildGeometry(p) {
   const {
     widthIn  = DEFAULTS.WIDTH_IN,
     heightIn = DEFAULTS.HEIGHT_IN,
@@ -151,7 +151,7 @@ function generateGraphPaper(canvas, p) {
   const lineGap       = Math.max(1, Math.round(boxPx / RATIOS.LINE_GAP_DIV));
   const nLines        = Math.max(1, (titleLines||[]).length);
   const maxTf         = Math.max(1, Math.round((boxPx - padInner) / nLines) - lineGap);
-  const titleFontSize = Math.min(Math.max(1, Math.round(boxPx * 0.22)), maxTf);
+  const titleFontSize = Math.min(Math.max(1, Math.round(boxPx * RATIOS.TITLE_FONT)), maxTf);
 
   const usableWPx  = widthPx  - 2 * marginPx;
   const usableHPx  = heightPx - 2 * marginPx - notesPx;
@@ -165,6 +165,242 @@ function generateGraphPaper(canvas, p) {
   const gridY0     = marginPx + (gridPx - yPhase) % gridPx;
   const gridBottom = heightPx - marginPx - notesPx;
 
+  return {
+    widthPx, heightPx, marginPx, gridPx, gridPerBox, boxPx, tabPx, notesPx, dashLen,
+    autoFontSize, labelFontSize, labelColor, padInner, lineGap, titleFontSize,
+    usableWPx, usableHPx, contentWPx, contentHPx,
+    xAbsBase, yAbsBase, gridX0, gridY0, gridBottom,
+    // Pass through params the draw functions need
+    lineColor, heavyColor, indexColor, lineThickness, heavyThickness,
+    dashed, titleLines, sheetCol, sheetRow, sheetsWide, sheetsTall,
+    tabStyle, startCol, startRow, dungeonCols, dungeonRows, dpi,
+  };
+}
+
+// ── Sub-renderers ────────────────────────────────────────────────────────────
+
+// Evenly-spaced tab positions along a seam
+function seamTabs(g) {
+  return function(seamTop, seamBot) {
+    /* eslint-disable no-magic-numbers */
+    const seamLen   = seamBot - seamTop;
+    const period    = Math.max(g.gridPx * 4, Math.round(g.boxPx * 1.2));
+    const nPeriods  = Math.max(2, Math.round(seamLen / period));
+    const actPeriod = seamLen / nPeriods;
+    const tabH      = Math.round(actPeriod * 0.5);
+    /* eslint-enable no-magic-numbers */
+    const tabs = [];
+    for (let i = 0; i < nPeriods; i++) {
+      const gapTop = seamTop + i * actPeriod;
+      const tabTop = gapTop + Math.round((actPeriod - tabH) / 2);
+      tabs.push({ gapTop, tabTop, tabBot: tabTop + tabH, gapBot: gapTop + actPeriod });
+    }
+    return tabs;
+  };
+}
+
+function drawTabShading(ctx, g) {
+  if (g.tabPx <= 0) return;
+  const getTabs = seamTabs(g);
+
+  if (g.sheetCol > 0) {
+    if (g.tabStyle === 'tape') {
+      ctx.fillStyle = TAB_SHADE;
+      ctx.fillRect(g.marginPx, g.marginPx, g.tabPx, g.gridBottom - g.marginPx);
+    } else {
+      const sTop = g.sheetRow > 0 ? g.marginPx + g.tabPx : g.marginPx;
+      ctx.fillStyle = TAB_SHADE;
+      for (const { gapTop, tabTop, tabBot, gapBot } of getTabs(sTop, g.gridBottom)) {
+        if (Math.round(tabTop) > Math.round(gapTop))
+          ctx.fillRect(g.marginPx, Math.round(gapTop), g.tabPx, Math.round(tabTop) - Math.round(gapTop));
+        if (Math.round(gapBot) > Math.round(tabBot))
+          ctx.fillRect(g.marginPx, Math.round(tabBot), g.tabPx, Math.round(gapBot) - Math.round(tabBot));
+      }
+    }
+  }
+  if (g.sheetRow > 0) {
+    if (g.tabStyle === 'tape') {
+      ctx.fillStyle = TAB_SHADE;
+      ctx.fillRect(g.marginPx, g.marginPx, g.widthPx - 2 * g.marginPx, g.tabPx);
+    } else {
+      const sLeft = g.sheetCol > 0 ? g.marginPx + g.tabPx : g.marginPx;
+      ctx.fillStyle = TAB_SHADE;
+      for (const { gapTop: gL, tabTop: tL, tabBot: tR, gapBot: gR } of getTabs(sLeft, g.widthPx - g.marginPx)) {
+        if (Math.round(tL) > Math.round(gL))
+          ctx.fillRect(Math.round(gL), g.marginPx, Math.round(tL) - Math.round(gL), g.tabPx);
+        if (Math.round(gR) > Math.round(tR))
+          ctx.fillRect(Math.round(tR), g.marginPx, Math.round(gR) - Math.round(tR), g.tabPx);
+      }
+    }
+  }
+  if (g.tabStyle === 'insert') {
+    ctx.fillStyle = SLOT_FILL;
+    if (g.sheetCol < g.sheetsWide - 1) ctx.fillRect(g.widthPx - g.marginPx - g.tabPx, g.marginPx, g.tabPx, g.gridBottom - g.marginPx);
+    if (g.sheetRow < g.sheetsTall - 1) ctx.fillRect(g.marginPx, g.gridBottom - g.tabPx, g.widthPx - 2 * g.marginPx, g.tabPx);
+  }
+}
+
+function drawGridLines(ctx, g) {
+  for (let x = g.gridX0; x <= g.widthPx - g.marginPx; x += g.gridPx) {
+    const absX    = (x - g.marginPx) + g.xAbsBase;
+    const isHeavy = Math.floor(absX / g.gridPx) % g.gridPerBox === 0;
+    ctx.strokeStyle = cssRgb(isHeavy ? g.heavyColor : g.lineColor);
+    ctx.lineWidth   = isHeavy ? g.heavyThickness : g.lineThickness;
+    ctx.setLineDash(g.dashed ? [g.dashLen, g.dashLen] : []);
+    ctx.beginPath(); ctx.moveTo(x, g.marginPx); ctx.lineTo(x, g.gridBottom); ctx.stroke();
+  }
+  for (let y = g.gridY0; y <= g.gridBottom; y += g.gridPx) {
+    const absY    = (y - g.marginPx) + g.yAbsBase;
+    const isHeavy = Math.floor(absY / g.gridPx) % g.gridPerBox === 0;
+    ctx.strokeStyle = cssRgb(isHeavy ? g.heavyColor : g.lineColor);
+    ctx.lineWidth   = isHeavy ? g.heavyThickness : g.lineThickness;
+    ctx.setLineDash(g.dashed ? [g.dashLen, g.dashLen] : []);
+    ctx.beginPath(); ctx.moveTo(g.marginPx, y); ctx.lineTo(g.widthPx - g.marginPx, y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawIndexLabels(ctx, g) {
+  ctx.font = `${g.labelFontSize}px monospace`;
+  ctx.fillStyle = cssRgb(g.labelColor);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const labelCy = g.marginPx / 2, labelCx = g.marginPx / 2;
+  for (let x = g.gridX0; x <= g.widthPx - g.marginPx; x += g.gridPx) {
+    const absX = (x - g.marginPx) + g.xAbsBase;
+    if (Math.floor(absX / g.gridPx) % g.gridPerBox === 0)
+      ctx.fillText(indexLabelFromNum(Math.floor(absX / g.gridPx)), x + g.gridPx / 2, labelCy);
+  }
+  for (let y = g.gridY0; y <= g.gridBottom; y += g.gridPx) {
+    const absY = (y - g.marginPx) + g.yAbsBase;
+    if (Math.floor(absY / g.gridPx) % g.gridPerBox === 0)
+      ctx.fillText(String(Math.floor(absY / g.gridPx) + 1), labelCx, y + g.gridPx / 2);
+  }
+}
+
+function drawTitleBlock(ctx, g) {
+  if (g.sheetCol !== 0 || g.sheetRow !== 0 || !g.titleLines) return;
+  const blockW = g.boxPx * 2, blockH = g.boxPx;
+  const radius = Math.max(2, Math.round(g.boxPx / RATIOS.ROUND_CORNER_DIV));
+  ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(1, g.heavyThickness); ctx.setLineDash([]);
+  ctx.beginPath(); roundRectPath(ctx, g.marginPx, g.marginPx, blockW, blockH, radius); ctx.stroke();
+
+  const active = g.titleLines.filter(l => l.trim());
+  const nActive = Math.max(1, active.length);
+  const totalH = nActive * g.titleFontSize + (nActive - 1) * g.lineGap;
+  let textY = g.marginPx + (blockH - totalH) / 2;
+  ctx.fillStyle = 'black'; ctx.font = `${g.titleFontSize}px monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const line of active) {
+    ctx.fillText(line, g.marginPx + blockW / 2, textY + g.titleFontSize / 2);
+    textY += g.titleFontSize + g.lineGap;
+  }
+}
+
+function drawSheetLabel(ctx, g) {
+  if (g.sheetsWide <= 1 && g.sheetsTall <= 1) return;
+  ctx.fillStyle = cssRgb(DEFAULTS.LABEL_COLOR);
+  ctx.font = `${g.autoFontSize}px monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(`Sheet ${indexLabelFromNum(g.sheetCol)}${g.sheetRow + 1}`,
+               g.widthPx - g.marginPx - g.boxPx, g.heightPx - g.marginPx - 2);
+}
+
+function drawNotesArea(ctx, g) {
+  if (g.notesPx <= 0) return;
+  const rulePx = Math.max(g.gridPx, Math.round(DEFAULTS.MARGIN_IN * g.dpi));
+  ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(1, g.heavyThickness); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(g.marginPx, g.gridBottom); ctx.lineTo(g.widthPx - g.marginPx, g.gridBottom); ctx.stroke();
+  ctx.fillStyle = cssRgb(g.indexColor);
+  ctx.font = `${g.autoFontSize}px monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('Notes', g.marginPx + (g.sheetCol > 0 ? g.tabPx : 0) + g.padInner, g.gridBottom + g.padInner);
+  ctx.strokeStyle = cssRgb(g.lineColor); ctx.lineWidth = g.lineThickness; ctx.setLineDash([]);
+  for (let y = g.gridBottom + rulePx; y <= g.heightPx - g.marginPx; y += rulePx) {
+    ctx.beginPath(); ctx.moveTo(g.marginPx, y); ctx.lineTo(g.widthPx - g.marginPx, y); ctx.stroke();
+  }
+}
+
+function drawDungeonBorder(ctx, g) {
+  if (!g.dungeonCols || !g.dungeonRows) return;
+
+  const dungOriginY = g.boxPx;
+  const totalW = g.sheetsWide * g.contentWPx;
+  const totalH = g.sheetsTall * g.contentHPx - dungOriginY;
+  const dungW  = g.dungeonCols * g.gridPx, dungH = g.dungeonRows * g.gridPx;
+  const dungXOff = Math.floor(Math.max(0, (totalW - dungW) / 2) / g.gridPx) * g.gridPx;
+  const dungYOff = Math.floor(Math.max(0, (totalH - dungH) / 2) / g.gridPx) * g.gridPx;
+
+  const lx = g.marginPx + dungXOff - g.xAbsBase;
+  const ty = g.marginPx + dungOriginY + dungYOff - g.yAbsBase;
+  const rx = lx + dungW, by = ty + dungH;
+  const sx0 = g.marginPx, sy0 = g.marginPx, sx1 = g.widthPx - g.marginPx, sy1 = g.gridBottom;
+
+  ctx.strokeStyle = cssRgb(NOTES_COLOR);
+  ctx.lineWidth = Math.max(2, g.heavyThickness + 1); ctx.setLineDash([]);
+
+  function hline(yy, x0, x1) {
+    const cx0 = Math.max(x0, sx0), cx1 = Math.min(x1, sx1);
+    if (cx0 < cx1) { ctx.beginPath(); ctx.moveTo(cx0, yy); ctx.lineTo(cx1, yy); ctx.stroke(); }
+  }
+  function vline(xx, y0, y1) {
+    const cy0 = Math.max(y0, sy0), cy1 = Math.min(y1, sy1);
+    if (cy0 < cy1) { ctx.beginPath(); ctx.moveTo(xx, cy0); ctx.lineTo(xx, cy1); ctx.stroke(); }
+  }
+
+  if (sy0 <= ty && ty <= sy1) hline(ty, lx, rx);
+  if (sy0 <= by && by <= sy1) hline(by, lx, rx);
+  if (sx0 <= lx && lx <= sx1) vline(lx, ty, by);
+  if (sx0 <= rx && rx <= sx1) vline(rx, ty, by);
+
+  // dungeon-relative labels
+  ctx.fillStyle = cssRgb(g.indexColor);
+  ctx.font = `${g.labelFontSize}px monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (sy0 <= ty && ty <= sy1 && ty - g.gridPx / 2 >= 0) {
+    for (let x = lx; x < rx; x += g.gridPx) {
+      const mx = x + g.gridPx / 2;
+      if (sx0 <= mx && mx <= sx1)
+        ctx.fillText(indexLabelFromNum(Math.round((x - lx) / g.gridPx)), mx, ty - g.gridPx / 2);
+    }
+  }
+  if (sx0 <= lx && lx <= sx1 && lx - g.gridPx / 2 >= 0) {
+    for (let y = ty; y < by; y += g.gridPx) {
+      const my = y + g.gridPx / 2;
+      if (sy0 <= my && my <= sy1)
+        ctx.fillText(String(Math.round((y - ty) / g.gridPx) + 1), lx - g.gridPx / 2, my);
+    }
+  }
+
+  // start marker
+  if (g.startCol != null && g.startRow != null) {
+    const absSx  = dungXOff + (g.startCol - 1) * g.gridPx;
+    const absSy  = dungYOff + (g.startRow - 1) * g.gridPx;
+    const localSx = g.marginPx + (absSx - g.xAbsBase);
+    const localSy = g.marginPx + dungOriginY + (absSy - g.yAbsBase);
+    if (g.marginPx <= localSx && localSx < g.widthPx - g.marginPx &&
+        g.marginPx <= localSy && localSy < g.gridBottom) {
+      /* eslint-disable no-magic-numbers */
+      ctx.fillStyle = 'rgb(255,255,180)';
+      ctx.fillRect(localSx, localSy, g.gridPx, g.gridPx);
+      ctx.fillStyle = 'rgb(180,120,0)';
+      /* eslint-enable no-magic-numbers */
+      ctx.font = `${g.autoFontSize}px monospace`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText('S', localSx + 2, localSy + 1);
+    }
+  }
+}
+
+// ── Core renderer ─────────────────────────────────────────────────────────────
+function generateGraphPaper(canvas, p) {
+  const g = buildGeometry(p);
+  // Destructure for the cut guides section (kept inline due to complexity)
+  const {
+    widthPx, heightPx, marginPx, gridPx, boxPx, tabPx, dashLen,
+    autoFontSize, gridBottom, heavyThickness, dpi,
+    sheetCol, sheetRow, sheetsWide, sheetsTall, tabStyle,
+  } = g;
+
   canvas.width  = widthPx;
   canvas.height = heightPx;
   const ctx = canvas.getContext('2d');
@@ -173,80 +409,8 @@ function generateGraphPaper(canvas, p) {
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, widthPx, heightPx);
 
-  // helper: evenly-spaced tab positions along a seam
-  function seamTabs(seamTop, seamBot) {
-    const seamLen   = seamBot - seamTop;
-    const period    = Math.max(gridPx * 4, Math.round(boxPx * 1.2));
-    const nPeriods  = Math.max(2, Math.round(seamLen / period));
-    const actPeriod = seamLen / nPeriods;
-    const tabH      = Math.round(actPeriod * 0.5);
-    const tabs = [];
-    for (let i = 0; i < nPeriods; i++) {
-      const gapTop = seamTop + i * actPeriod;
-      const tabTop = gapTop + Math.round((actPeriod - tabH) / 2);
-      tabs.push({ gapTop, tabTop, tabBot: tabTop + tabH, gapBot: gapTop + actPeriod });
-    }
-    return tabs;
-  }
-
-  // tab shading — left/top strip on sheets that go under neighbours
-  if (tabPx > 0) {
-    if (sheetCol > 0) {
-      if (tabStyle === 'tape') {
-        ctx.fillStyle = 'rgb(210,230,255)';
-        ctx.fillRect(marginPx, marginPx, tabPx, gridBottom - marginPx);
-      } else {
-        const seamTop = sheetRow > 0 ? marginPx + tabPx : marginPx;
-        ctx.fillStyle = 'rgb(210,230,255)';
-        for (const { gapTop, tabTop, tabBot, gapBot } of seamTabs(seamTop, gridBottom)) {
-          if (Math.round(tabTop) > Math.round(gapTop))
-            ctx.fillRect(marginPx, Math.round(gapTop), tabPx, Math.round(tabTop) - Math.round(gapTop));
-          if (Math.round(gapBot) > Math.round(tabBot))
-            ctx.fillRect(marginPx, Math.round(tabBot), tabPx, Math.round(gapBot) - Math.round(tabBot));
-        }
-      }
-    }
-    if (sheetRow > 0) {
-      if (tabStyle === 'tape') {
-        ctx.fillStyle = 'rgb(210,230,255)';
-        ctx.fillRect(marginPx, marginPx, widthPx - 2*marginPx, tabPx);
-      } else {
-        const seamLeft = sheetCol > 0 ? marginPx + tabPx : marginPx;
-        ctx.fillStyle = 'rgb(210,230,255)';
-        for (const { gapTop: gL, tabTop: tL, tabBot: tR, gapBot: gR } of seamTabs(seamLeft, widthPx - marginPx)) {
-          if (Math.round(tL) > Math.round(gL))
-            ctx.fillRect(Math.round(gL), marginPx, Math.round(tL) - Math.round(gL), tabPx);
-          if (Math.round(gR) > Math.round(tR))
-            ctx.fillRect(Math.round(tR), marginPx, Math.round(gR) - Math.round(tR), tabPx);
-        }
-      }
-    }
-    // insert mode: shade slot zone on mating edges
-    if (tabStyle === 'insert') {
-      ctx.fillStyle = 'rgb(220,255,220)';
-      if (sheetCol < sheetsWide - 1) ctx.fillRect(widthPx - marginPx - tabPx, marginPx, tabPx, gridBottom - marginPx);
-      if (sheetRow < sheetsTall - 1) ctx.fillRect(marginPx, gridBottom - tabPx, widthPx - 2*marginPx, tabPx);
-    }
-  }
-
-  // grid lines
-  for (let x = gridX0; x <= widthPx - marginPx; x += gridPx) {
-    const absX    = (x - marginPx) + xAbsBase;
-    const isHeavy = Math.floor(absX / gridPx) % gridPerBox === 0;
-    ctx.strokeStyle = cssRgb(isHeavy ? heavyColor : lineColor);
-    ctx.lineWidth   = isHeavy ? heavyThickness : lineThickness;
-    ctx.setLineDash(dashed ? [dashLen, dashLen] : []);
-    ctx.beginPath(); ctx.moveTo(x, marginPx); ctx.lineTo(x, gridBottom); ctx.stroke();
-  }
-  for (let y = gridY0; y <= gridBottom; y += gridPx) {
-    const absY    = (y - marginPx) + yAbsBase;
-    const isHeavy = Math.floor(absY / gridPx) % gridPerBox === 0;
-    ctx.strokeStyle = cssRgb(isHeavy ? heavyColor : lineColor);
-    ctx.lineWidth   = isHeavy ? heavyThickness : lineThickness;
-    ctx.setLineDash(dashed ? [dashLen, dashLen] : []);
-    ctx.beginPath(); ctx.moveTo(marginPx, y); ctx.lineTo(widthPx - marginPx, y); ctx.stroke();
-  }
-  ctx.setLineDash([]);
+  drawTabShading(ctx, g);
+  drawGridLines(ctx, g);
 
   // ── cut / insert guides ───────────────────────────────────────────────────
   if (tabPx > 0) {
@@ -286,7 +450,7 @@ function generateGraphPaper(canvas, p) {
       if (sheetCol > 0) {
         const cx       = marginPx + tabPx;
         const seamTop  = sheetRow > 0 ? marginPx + tabPx : marginPx;
-        const tabs     = seamTabs(seamTop, gridBottom);
+        const tabs     = seamTabs(g)(seamTop, gridBottom);
         ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
         for (const { gapTop, tabTop, tabBot, gapBot } of tabs) {
           ctx.setLineDash([gDash, gDash]);
@@ -309,7 +473,7 @@ function generateGraphPaper(canvas, p) {
       if (sheetRow > 0) {
         const cy      = marginPx + tabPx;
         const seamLeft = sheetCol > 0 ? marginPx + tabPx : marginPx;
-        const tabs    = seamTabs(seamLeft, widthPx - marginPx);
+        const tabs    = seamTabs(g)(seamLeft, widthPx - marginPx);
         ctx.strokeStyle = cutCol; ctx.lineWidth = cutW;
         for (const { gapTop: gapL, tabTop: tabL, tabBot: tabR, gapBot: gapR } of tabs) {
           ctx.setLineDash([gDash, gDash]);
@@ -329,7 +493,7 @@ function generateGraphPaper(canvas, p) {
         const slotX0  = widthPx - marginPx - tabPx;
         const slotX1  = widthPx - marginPx;
         const seamTop = sheetRow > 0 ? marginPx + tabPx : marginPx;
-        const tabs    = seamTabs(seamTop, gridBottom);
+        const tabs    = seamTabs(g)(seamTop, gridBottom);
         ctx.strokeStyle = slotCol; ctx.lineWidth = cutW;
         ctx.setLineDash([gDash, gDash]);
         for (const { tabTop, tabBot } of tabs) {
@@ -353,7 +517,7 @@ function generateGraphPaper(canvas, p) {
         const slotY0  = gridBottom - tabPx;
         const slotY1  = gridBottom;
         const seamLeft = sheetCol > 0 ? marginPx + tabPx : marginPx;
-        const tabs    = seamTabs(seamLeft, widthPx - marginPx);
+        const tabs    = seamTabs(g)(seamLeft, widthPx - marginPx);
         ctx.strokeStyle = slotCol; ctx.lineWidth = cutW;
         ctx.setLineDash([gDash, gDash]);
         for (const { tabTop: tabL, tabBot: tabR } of tabs) {
@@ -370,134 +534,11 @@ function generateGraphPaper(canvas, p) {
     }
   }
 
-  // index labels
-  ctx.font = `${labelFontSize}px monospace`;
-  ctx.fillStyle = cssRgb(labelColor);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const labelCy = marginPx / 2, labelCx = marginPx / 2;
-  for (let x = gridX0; x <= widthPx - marginPx; x += gridPx) {
-    const absX = (x - marginPx) + xAbsBase;
-    if (Math.floor(absX / gridPx) % gridPerBox === 0)
-      ctx.fillText(indexLabelFromNum(Math.floor(absX / gridPx)), x + gridPx / 2, labelCy);
-  }
-  for (let y = gridY0; y <= gridBottom; y += gridPx) {
-    const absY = (y - marginPx) + yAbsBase;
-    if (Math.floor(absY / gridPx) % gridPerBox === 0)
-      ctx.fillText(String(Math.floor(absY / gridPx) + 1), labelCx, y + gridPx / 2);
-  }
-
-  // title block (sheet 0,0 only)
-  if (sheetCol === 0 && sheetRow === 0 && titleLines) {
-    const blockW = boxPx * 2, blockH = boxPx;
-    const radius = Math.max(2, Math.round(boxPx / 8));
-    ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(1, heavyThickness); ctx.setLineDash([]);
-    ctx.beginPath(); roundRectPath(ctx, marginPx, marginPx, blockW, blockH, radius); ctx.stroke();
-
-    const active = titleLines.filter(l => l.trim());
-    const nActive = Math.max(1, active.length);
-    const totalH = nActive * titleFontSize + (nActive - 1) * lineGap;
-    let textY = marginPx + (blockH - totalH) / 2;
-    ctx.fillStyle = 'black'; ctx.font = `${titleFontSize}px monospace`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (const line of active) {
-      ctx.fillText(line, marginPx + blockW / 2, textY + titleFontSize / 2);
-      textY += titleFontSize + lineGap;
-    }
-  }
-
-  // sheet label
-  if (sheetsWide > 1 || sheetsTall > 1) {
-    ctx.fillStyle = 'rgb(220,220,220)';
-    ctx.font = `${autoFontSize}px monospace`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`Sheet ${indexLabelFromNum(sheetCol)}${sheetRow + 1}`,
-                 widthPx - marginPx - boxPx, heightPx - marginPx - 2);
-  }
-
-  // dungeon border + labels
-  let dungXOff = 0, dungYOff = 0;
-  const dungOriginY = boxPx;
-
-  if (dungeonCols && dungeonRows) {
-    const totalW = sheetsWide * contentWPx;
-    const totalH = sheetsTall * contentHPx - dungOriginY;
-    const dungW  = dungeonCols * gridPx, dungH = dungeonRows * gridPx;
-    dungXOff = Math.floor(Math.max(0, (totalW - dungW) / 2) / gridPx) * gridPx;
-    dungYOff = Math.floor(Math.max(0, (totalH - dungH) / 2) / gridPx) * gridPx;
-
-    const lx = marginPx + dungXOff - xAbsBase;
-    const ty = marginPx + dungOriginY + dungYOff - yAbsBase;
-    const rx = lx + dungW, by = ty + dungH;
-    const sx0 = marginPx, sy0 = marginPx, sx1 = widthPx - marginPx, sy1 = gridBottom;
-
-    ctx.strokeStyle = cssRgb([60, 60, 60]);
-    ctx.lineWidth = Math.max(2, heavyThickness + 1); ctx.setLineDash([]);
-
-    function hline(yy, x0, x1) {
-      const cx0 = Math.max(x0, sx0), cx1 = Math.min(x1, sx1);
-      if (cx0 < cx1) { ctx.beginPath(); ctx.moveTo(cx0, yy); ctx.lineTo(cx1, yy); ctx.stroke(); }
-    }
-    function vline(xx, y0, y1) {
-      const cy0 = Math.max(y0, sy0), cy1 = Math.min(y1, sy1);
-      if (cy0 < cy1) { ctx.beginPath(); ctx.moveTo(xx, cy0); ctx.lineTo(xx, cy1); ctx.stroke(); }
-    }
-
-    if (sy0 <= ty && ty <= sy1) hline(ty, lx, rx);
-    if (sy0 <= by && by <= sy1) hline(by, lx, rx);
-    if (sx0 <= lx && lx <= sx1) vline(lx, ty, by);
-    if (sx0 <= rx && rx <= sx1) vline(rx, ty, by);
-
-    // dungeon-relative labels
-    ctx.fillStyle = cssRgb(indexColor);
-    ctx.font = `${labelFontSize}px monospace`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (sy0 <= ty && ty <= sy1 && ty - gridPx/2 >= 0) {
-      for (let x = lx; x < rx; x += gridPx) {
-        const mx = x + gridPx / 2;
-        if (sx0 <= mx && mx <= sx1)
-          ctx.fillText(indexLabelFromNum(Math.round((x - lx) / gridPx)), mx, ty - gridPx / 2);
-      }
-    }
-    if (sx0 <= lx && lx <= sx1 && lx - gridPx/2 >= 0) {
-      for (let y = ty; y < by; y += gridPx) {
-        const my = y + gridPx / 2;
-        if (sy0 <= my && my <= sy1)
-          ctx.fillText(String(Math.round((y - ty) / gridPx) + 1), lx - gridPx / 2, my);
-      }
-    }
-  }
-
-  // start marker
-  if (startCol != null && startRow != null && dungeonCols && dungeonRows) {
-    const absSx  = dungXOff + (startCol - 1) * gridPx;
-    const absSy  = dungYOff + (startRow  - 1) * gridPx;
-    const localSx = marginPx + (absSx - xAbsBase);
-    const localSy = marginPx + dungOriginY + (absSy - yAbsBase);
-    if (marginPx <= localSx && localSx < widthPx - marginPx &&
-        marginPx <= localSy && localSy < gridBottom) {
-      ctx.fillStyle = 'rgb(255,255,180)';
-      ctx.fillRect(localSx, localSy, gridPx, gridPx);
-      ctx.fillStyle = 'rgb(180,120,0)';
-      ctx.font = `${autoFontSize}px monospace`;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      ctx.fillText('S', localSx + 2, localSy + 1);
-    }
-  }
-
-  // notes area
-  if (notesPx > 0) {
-    const rulePx = Math.max(gridPx, Math.round(0.25 * dpi));
-    ctx.strokeStyle = 'black'; ctx.lineWidth = Math.max(1, heavyThickness); ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(marginPx, gridBottom); ctx.lineTo(widthPx - marginPx, gridBottom); ctx.stroke();
-    ctx.fillStyle = cssRgb(indexColor);
-    ctx.font = `${autoFontSize}px monospace`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText('Notes', marginPx + (sheetCol > 0 ? tabPx : 0) + padInner, gridBottom + padInner);
-    ctx.strokeStyle = cssRgb(lineColor); ctx.lineWidth = lineThickness; ctx.setLineDash([]);
-    for (let y = gridBottom + rulePx; y <= heightPx - marginPx; y += rulePx) {
-      ctx.beginPath(); ctx.moveTo(marginPx, y); ctx.lineTo(widthPx - marginPx, y); ctx.stroke();
-    }
-  }
+  drawIndexLabels(ctx, g);
+  drawTitleBlock(ctx, g);
+  drawSheetLabel(ctx, g);
+  drawDungeonBorder(ctx, g);
+  drawNotesArea(ctx, g);
 }
 
 // ── Read params ───────────────────────────────────────────────────────────────
