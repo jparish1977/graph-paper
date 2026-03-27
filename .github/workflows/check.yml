@@ -31,13 +31,13 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Clone JP_TOOLS
         run: git clone https://github.com/jparish1977/JP_TOOLS.git /tmp/jp_tools
       - name: Install JS tools
         run: cd /tmp/jp_tools && npm install
       - name: Check JS
-        run: python /tmp/jp_tools/check.py app.js --lang js --pretty
+        run: python /tmp/jp_tools/check.py renderer.js --lang js --pretty && python /tmp/jp_tools/check.py ui-app.js --lang js --pretty
       - name: Check CSS
         run: python /tmp/jp_tools/check.py style.css --lang css --pretty
       - name: Check HTML
