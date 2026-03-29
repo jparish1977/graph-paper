@@ -5,9 +5,24 @@ from tkinter import ttk, filedialog, messagebox, colorchooser
 from PIL import Image, ImageTk
 import threading
 import math
+import json
 import os
 
 from generate_graph_paper import generate_graph_paper, generate_all_sheets
+
+PRESETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dungeon_presets.json")
+
+
+def load_dungeon_presets():
+    if os.path.exists(PRESETS_FILE):
+        with open(PRESETS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_dungeon_presets(presets):
+    with open(PRESETS_FILE, "w", encoding="utf-8") as f:
+        json.dump(presets, f, ensure_ascii=False, indent=2)
 
 # ── page presets ─────────────────────────────────────────────────────────────
 PAGE_PRESETS = {
@@ -37,12 +52,6 @@ GRID_SIZES = {
     "1 inch":    1.0,
 }
 
-BOX_SIZES = {
-    "1/2 inch": 0.5,
-    "1 inch":   1.0,
-    "2 inches": 2.0,
-    "4 inches": 4.0,
-}
 
 TAB_SIZES = {
     "1/8 inch (3mm)":  0.125,
@@ -50,22 +59,6 @@ TAB_SIZES = {
     "1/2 inch (13mm)": 0.5,
 }
 
-# Fields: (page_w, page_h, notes_in, dungeon_cols, dungeon_rows, start_col, start_row)
-# Sheets wide/tall are computed automatically from page size and dungeon size.
-# Sizes from FAQ are approximate — adjust as needed.
-DUNGEON_PRESETS = {
-    "— select dungeon —": None,
-    "D1–8  (≈26×26) · Letter":           (8.5, 11,   1.5,  26,  26,  2, 11),
-    "D9–14 (≈40×30) · Letter landscape": (11,  8.5,  1.5,  40,  30,  None, None),
-    "D15–18 (≈62×48) · Letter":          (8.5, 11,   1.0,  62,  48,  None, None),
-    "D15–18 (≈62×48) · T125":            (16,  13,   2.0,  62,  48,  None, None),
-    "D19–20 (≈84×110) · Letter":         (8.5, 11,   0.5,  84, 110,  None, None),
-    "D19–20 (≈84×110) · T125":           (22,  28,   2.0,  84, 110,  None, None),
-    "D21   (≈115×115) · Letter":         (8.5, 11,   0.5, 115, 115,  None, None),
-    "D21   (≈115×115) · T125":           (24,  30,   1.0, 115, 115,  None, None),
-    "D22   (≈107×114) · Letter":         (8.5, 11,   0.5, 107, 114,  None, None),
-    "D22   (≈107×114) · T125":           (24,  30,   1.0, 107, 114,  None, None),
-}
 
 PREVIEW_MAX_PX = 1200
 
@@ -95,13 +88,16 @@ class App(tk.Tk):
         self.title("Graph Paper Builder — Double Dungeons Edition")
         self.resizable(True, True)
         self.minsize(820, 580)
-        self._preview_job  = None
+        self._preview_job   = None
         self._preview_photo = None
+        self._preview_base  = None   # last rendered PIL image (fit to canvas at zoom=1)
+        self._preview_zoom  = 1.0
         self._last_canvas_size = (0, 0)
 
         self._line_color  = [173, 216, 230]
         self._heavy_color = [173, 216, 230]
         self._index_color = [40,  60,  120]
+        self.dungeon_presets = load_dungeon_presets()
 
         self.columnconfigure(0, weight=0)
         self.columnconfigure(1, weight=1)
@@ -151,10 +147,14 @@ class App(tk.Tk):
         df.pack(fill="x", **pad)
         tk.Label(df, text="Dungeon:", anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
         self.dungeon_var = tk.StringVar(value="— select dungeon —")
-        dng_cb = ttk.Combobox(df, textvariable=self.dungeon_var,
-                               values=list(DUNGEON_PRESETS.keys()), state="readonly", width=34)
-        dng_cb.grid(row=0, column=1, sticky="w", padx=8, pady=3)
-        dng_cb.bind("<<ComboboxSelected>>", self._on_dungeon_preset)
+        self.dng_cb = ttk.Combobox(df, textvariable=self.dungeon_var,
+                                    values=self._preset_names(), state="readonly", width=28)
+        self.dng_cb.grid(row=0, column=1, columnspan=2, sticky="w", padx=8, pady=3)
+        self.dng_cb.bind("<<ComboboxSelected>>", self._on_dungeon_preset)
+        ttk.Button(df, text="Save", width=6, command=self._save_preset).grid(
+            row=1, column=1, sticky="w", padx=8, pady=3)
+        ttk.Button(df, text="Delete", width=6, command=self._delete_preset).grid(
+            row=1, column=2, sticky="w", padx=2, pady=3)
 
         # Page size ───────────────────────────────────────────────────────────
         pf = ttk.LabelFrame(left, text="Page Size", padding=6)
@@ -183,8 +183,11 @@ class App(tk.Tk):
         gf = ttk.LabelFrame(left, text="Grid Options", padding=6)
         gf.pack(fill="x", **pad)
 
-        self.grid_size_var    = make_combo(gf, 0, "Grid spacing:", list(GRID_SIZES.keys()), "1/4 inch")
-        self.box_size_var     = make_combo(gf, 1, "Box (heavy line) interval:", list(BOX_SIZES.keys()), "1 inch")
+        self.grid_size_var = make_combo(gf, 0, "Grid spacing:", list(GRID_SIZES.keys()), "1/4 inch")
+        tk.Label(gf, text="Heavy line every N cells:", anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=3)
+        self.box_cells_var = tk.StringVar(value="4")
+        ttk.Spinbox(gf, from_=1, to=200, textvariable=self.box_cells_var, width=5).grid(
+            row=1, column=1, sticky="w", padx=8, pady=3)
         self.line_thickness_var  = make_entry(gf, 2, "Line thickness:", "1", width=5)
         self.heavy_thickness_var = make_entry(gf, 3, "Heavy thickness:", "2", width=5)
         self.dashed_var = tk.BooleanVar(value=True)
@@ -203,7 +206,7 @@ class App(tk.Tk):
         tf.pack(fill="x", **pad)
 
         self.title_vars = []
-        defaults = ["Ginger Plays Games", "Double Dungeons", "{size}", "{dpi}"]
+        defaults = ["Ginger Plays Games", "Double Dungeons", "", ""]
         hints    = ["Line 1", "Line 2", "Line 3 ({size} = auto)", "Line 4 ({dpi} = auto)"]
         for i, (d, h) in enumerate(zip(defaults, hints)):
             tk.Label(tf, text=f"{h}:", anchor="w").grid(row=i, column=0, sticky="w", padx=8, pady=2)
@@ -212,7 +215,7 @@ class App(tk.Tk):
             self.title_vars.append(var)
 
         # Multi-sheet / tabs ──────────────────────────────────────────────────
-        mf = ttk.LabelFrame(left, text="Multi-Sheet Assembly (for taping)", padding=6)
+        mf = ttk.LabelFrame(left, text="Multi-Sheet Assembly", padding=6)
         mf.pack(fill="x", **pad)
 
         tk.Label(mf, text="Sheets wide:", anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
@@ -225,8 +228,16 @@ class App(tk.Tk):
             row=0, column=3, sticky="w", padx=8, pady=3)
 
         self.tab_size_var = make_combo(mf, 1, "Tab overlap:", list(TAB_SIZES.keys()), "1/4 inch (6mm)", width=18)
-        tk.Label(mf, text="Cut shaded edge,\ntape under neighbour sheet.",
-                 fg="gray", justify="left").grid(row=2, column=0, columnspan=4, sticky="w", padx=8, pady=2)
+
+        tk.Label(mf, text="Assembly:", anchor="w").grid(row=2, column=0, sticky="w", padx=8, pady=3)
+        self.tab_style_var = tk.StringVar(value="tape")
+        ttk.Combobox(mf, textvariable=self.tab_style_var,
+                     values=["tape", "insert"], state="readonly", width=10).grid(
+            row=2, column=1, columnspan=3, sticky="w", padx=8, pady=3)
+        self._tab_hint = tk.Label(mf, text="Cut shaded edge, tape under neighbour sheet.",
+                                  fg="gray", justify="left", wraplength=260)
+        self._tab_hint.grid(row=3, column=0, columnspan=4, sticky="w", padx=8, pady=2)
+        self.tab_style_var.trace_add("write", self._on_tab_style)
 
         tk.Label(mf, text="Dungeon size (squares):", anchor="w").grid(row=3, column=0, sticky="w", padx=8, pady=3)
         self.dungeon_cols_var = tk.StringVar(value="")
@@ -280,6 +291,8 @@ class App(tk.Tk):
         br.pack(fill="x", pady=(6, 2))
         self.gen_btn = ttk.Button(br, text="Generate & Save", command=self._generate)
         self.gen_btn.pack(side="left", padx=4)
+        self.print_btn = ttk.Button(br, text="Print…", command=self._print)
+        self.print_btn.pack(side="left", padx=4)
 
         self.status_var = tk.StringVar(value="Ready.")
         tk.Label(left, textvariable=self.status_var, anchor="w", fg="gray").pack(fill="x", padx=4)
@@ -291,19 +304,35 @@ class App(tk.Tk):
         right.columnconfigure(0, weight=1)
         right.rowconfigure(1, weight=1)
 
-        tk.Label(right, text="Preview", bg="#f0f0f0", fg="#555").grid(row=0, column=0, pady=(6, 2))
-        self.canvas = tk.Canvas(right, bg="white",
-                                highlightthickness=1, highlightbackground="#ccc")
-        self.canvas.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        tk.Label(right, text="Preview  (scroll to zoom)", bg="#f0f0f0", fg="#555").grid(
+            row=0, column=0, pady=(6, 2))
+
+        cf = tk.Frame(right)
+        cf.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        cf.columnconfigure(0, weight=1)
+        cf.rowconfigure(0, weight=1)
+
+        self.canvas = tk.Canvas(cf, bg="white", highlightthickness=1, highlightbackground="#ccc")
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        vsb = ttk.Scrollbar(cf, orient="vertical",   command=self.canvas.yview)
+        hsb = ttk.Scrollbar(cf, orient="horizontal", command=self.canvas.xview)
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        self.canvas.config(xscrollcommand=hsb.set, yscrollcommand=vsb.set)
+
         self._draw_placeholder()
         self.preview_btn = ttk.Button(right, text="Refresh Preview", command=self._schedule_preview)
         self.preview_btn.grid(row=2, column=0, pady=(4, 8))
         self.canvas.bind("<Configure>", self._on_canvas_resize)
+        self.canvas.bind("<MouseWheel>",  self._on_scroll)   # Windows / macOS
+        self.canvas.bind("<Button-4>",    self._on_scroll)   # Linux scroll up
+        self.canvas.bind("<Button-5>",    self._on_scroll)   # Linux scroll down
 
     # ── traces ────────────────────────────────────────────────────────────────
     def _wire_traces(self):
         watch = [self.width_var, self.height_var, self.margin_var, self.font_size_var,
-                 self.dpi_var, self.output_var, self.grid_size_var, self.box_size_var,
+                 self.dpi_var, self.output_var, self.grid_size_var, self.box_cells_var,
                  self.preset_var, self.line_thickness_var, self.heavy_thickness_var,
                  self.format_var, self.sheets_wide_var, self.sheets_tall_var,
                  self.tab_size_var, self.notes_bottom_var,
@@ -341,6 +370,16 @@ class App(tk.Tk):
         self._notes_entry.config(state="normal" if self.notes_enabled_var.get() else "disabled")
         self._schedule_preview()
 
+    def _on_tab_style(self, *_):
+        style = self.tab_style_var.get()
+        if style == "insert":
+            self._tab_hint.config(
+                text="Red: cut comb tabs on strip edge. Green: cut slots on mating edge. "
+                     "Tabs insert from behind, fold flat — writing surface stays clean.")
+        else:
+            self._tab_hint.config(text="Cut shaded edge, tape under neighbour sheet.")
+        self._schedule_preview()
+
     def _on_preset(self, _=None):
         dims = PAGE_PRESETS.get(self.preset_var.get())
         if dims:
@@ -348,11 +387,60 @@ class App(tk.Tk):
             self.height_var.set(str(dims[1]))
             self.notes_bottom_var.set(str(dims[2]))
 
+    def _preset_names(self):
+        return ["— select dungeon —"] + list(self.dungeon_presets.keys())
+
+    def _refresh_preset_list(self):
+        self.dng_cb["values"] = self._preset_names()
+
+    def _save_preset(self):
+        from tkinter.simpledialog import askstring
+        name = askstring("Save Preset", "Preset name:", initialvalue=self.dungeon_var.get()
+                         if self.dungeon_var.get() != "— select dungeon —" else "")
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        try:
+            p = self._read_params()
+            self.dungeon_presets[name] = {
+                "page_w":      p["width_in"],
+                "page_h":      p["height_in"],
+                "notes_in":    p["notes_bottom_in"],
+                "dungeon_cols": p["dungeon_cols"],
+                "dungeon_rows": p["dungeon_rows"],
+                "start_col":   p["start_col"],
+                "start_row":   p["start_row"],
+            }
+            save_dungeon_presets(self.dungeon_presets)
+            self._refresh_preset_list()
+            self.dungeon_var.set(name)
+            self.status_var.set(f"Preset '{name}' saved.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def _delete_preset(self):
+        name = self.dungeon_var.get()
+        if name == "— select dungeon —" or name not in self.dungeon_presets:
+            return
+        if not messagebox.askyesno("Delete preset", f"Delete '{name}'?"):
+            return
+        del self.dungeon_presets[name]
+        save_dungeon_presets(self.dungeon_presets)
+        self._refresh_preset_list()
+        self.dungeon_var.set("— select dungeon —")
+        self.status_var.set(f"Preset '{name}' deleted.")
+
     def _on_dungeon_preset(self, _=None):
-        vals = DUNGEON_PRESETS.get(self.dungeon_var.get())
+        vals = self.dungeon_presets.get(self.dungeon_var.get())
         if not vals:
             return
-        w, h, notes, dcols, drows, sc, sr = vals
+        w    = vals["page_w"]
+        h    = vals["page_h"]
+        notes = vals["notes_in"]
+        dcols = vals.get("dungeon_cols")
+        drows = vals.get("dungeon_rows")
+        sc    = vals.get("start_col")
+        sr    = vals.get("start_row")
         self.width_var.set(str(w))
         self.height_var.set(str(h))
         self.notes_bottom_var.set(str(notes))
@@ -362,9 +450,13 @@ class App(tk.Tk):
         self.dungeon_rows_var.set(str(drows) if drows else "")
         self.start_col_var.set(str(sc) if sc else "")
         self.start_row_var.set(str(sr) if sr else "")
-        self.grid_size_var.set("1/4 inch")
+        self.grid_size_var.set(vals.get("grid_size", "1/4 inch"))
         self.preset_var.set("Custom")
-        self._auto_sheets()
+        if "sheets_wide" in vals and "sheets_tall" in vals:
+            self.sheets_wide_var.set(str(vals["sheets_wide"]))
+            self.sheets_tall_var.set(str(vals["sheets_tall"]))
+        else:
+            self._auto_sheets()
 
     def _auto_sheets(self):
         """Compute sheets_wide/tall needed to fit the dungeon on the current page size."""
@@ -373,8 +465,9 @@ class App(tk.Tk):
             height_in = float(self.height_var.get())
             margin_in = float(self.margin_var.get())
             notes_in  = float(self.notes_bottom_var.get() or 0)
-            grid_in   = GRID_SIZES[self.grid_size_var.get()]
-            box_in    = BOX_SIZES[self.box_size_var.get()]
+            grid_in    = GRID_SIZES[self.grid_size_var.get()]
+            box_cells  = max(1, int(self.box_cells_var.get() or 4))
+            box_in     = box_cells * grid_in
             dcols = int(self.dungeon_cols_var.get()) if self.dungeon_cols_var.get().strip() else None
             drows = int(self.dungeon_rows_var.get()) if self.dungeon_rows_var.get().strip() else None
             if not dcols or not drows:
@@ -432,7 +525,7 @@ class App(tk.Tk):
             "dpi":              dpi,
             "margin_in":        float(self.margin_var.get()),
             "grid_size_in":     GRID_SIZES[self.grid_size_var.get()],
-            "box_size_in":      BOX_SIZES[self.box_size_var.get()],
+            "box_size_in":      max(1, int(self.box_cells_var.get() or 4)) * GRID_SIZES[self.grid_size_var.get()],
             "font_size":        int(fs) if fs else None,
             "line_color":       tuple(self._line_color),
             "heavy_color":      tuple(self._heavy_color),
@@ -444,6 +537,7 @@ class App(tk.Tk):
             "sheets_wide":      int(self.sheets_wide_var.get()),
             "sheets_tall":      int(self.sheets_tall_var.get()),
             "tab_in":           TAB_SIZES[self.tab_size_var.get()],
+            "tab_style":        self.tab_style_var.get(),
             "notes_bottom_in":  float(self.notes_bottom_var.get() or 0) if self.notes_enabled_var.get() else 0.0,
             "start_col":    int(self.start_col_var.get())    if self.start_col_var.get().strip()    else None,
             "start_row":    int(self.start_row_var.get())    if self.start_row_var.get().strip()    else None,
@@ -458,6 +552,7 @@ class App(tk.Tk):
 
     # ── preview ───────────────────────────────────────────────────────────────
     def _schedule_preview(self, delay=600):
+        self._preview_zoom = 1.0
         if self._preview_job:
             self.after_cancel(self._preview_job)
         self._preview_job = self.after(delay, self._run_preview)
@@ -515,12 +610,32 @@ class App(tk.Tk):
         return self._fit(composite, canvas_w, canvas_h)
 
     def _show_preview(self, img, canvas_w, canvas_h):
+        self._preview_base = img
+        self._preview_zoom = 1.0
+        self._apply_zoom()
+        self.preview_btn.config(state="normal")
+        self.status_var.set("Ready.")
+
+    def _apply_zoom(self):
+        if self._preview_base is None:
+            return
+        img = self._preview_base
+        if self._preview_zoom != 1.0:
+            nw = max(1, int(img.width  * self._preview_zoom))
+            nh = max(1, int(img.height * self._preview_zoom))
+            img = img.resize((nw, nh), Image.LANCZOS)
         photo = ImageTk.PhotoImage(img)
         self._preview_photo = photo
         self.canvas.delete("all")
-        self.canvas.create_image(canvas_w // 2, canvas_h // 2, anchor="center", image=photo)
-        self.preview_btn.config(state="normal")
-        self.status_var.set("Ready.")
+        self.canvas.config(scrollregion=(0, 0, img.width, img.height))
+        self.canvas.create_image(img.width // 2, img.height // 2, anchor="center", image=photo)
+
+    def _on_scroll(self, event):
+        if event.num == 4 or (hasattr(event, "delta") and event.delta > 0):
+            self._preview_zoom = min(8.0, self._preview_zoom * 1.15)
+        else:
+            self._preview_zoom = max(0.2, self._preview_zoom / 1.15)
+        self._apply_zoom()
 
     def _preview_error(self, msg, canvas_w, canvas_h):
         self.canvas.delete("all")
@@ -602,6 +717,73 @@ class App(tk.Tk):
         self.status_var.set(f"Error: {msg}")
         self.gen_btn.config(state="normal")
         messagebox.showerror("Error", msg)
+
+    def _print(self):
+        import tempfile
+        import platform
+        self.print_btn.config(state="disabled")
+        self.status_var.set("Generating for print…")
+        is_win = platform.system() == "Windows"
+        def worker():
+            try:
+                params = self._read_params()
+                dpi    = params["dpi"]
+                sw, st = params["sheets_wide"], params["sheets_tall"]
+                kw     = {k: v for k, v in params.items()
+                          if k not in ("dpi", "sheets_wide", "sheets_tall")}
+                if sw == 1 and st == 1:
+                    img = generate_graph_paper(dpi=dpi, sheets_wide=1, sheets_tall=1, **kw)
+                    if is_win:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+                            tmp = f.name
+                        img.save(tmp, "PNG")
+                        self.after(0, self._do_print, [tmp])
+                    else:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+                            tmp = f.name
+                        img.save(tmp, "PDF", resolution=dpi)
+                        self.after(0, self._do_print, [tmp])
+                else:
+                    sheets = generate_all_sheets(sw, st, dpi=dpi, **kw)
+                    if is_win:
+                        paths = []
+                        for col, row, img in sheets:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+                                paths.append(f.name)
+                            img.save(paths[-1], "PNG")
+                        self.after(0, self._do_print, paths)
+                    else:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+                            tmp = f.name
+                        images = [img for _, _, img in sheets]
+                        images[0].save(tmp, "PDF", resolution=dpi,
+                                       save_all=True, append_images=images[1:])
+                        self.after(0, self._do_print, [tmp])
+            except Exception as e:
+                self.after(0, self._error_print, str(e))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _do_print(self, paths):
+        import subprocess
+        import platform
+        self.print_btn.config(state="normal")
+        self.status_var.set("Ready.")
+        try:
+            sys = platform.system()
+            for path in paths:
+                if sys == "Windows":
+                    os.startfile(os.path.abspath(path), "print")
+                elif sys == "Darwin":
+                    subprocess.run(["lpr", path])
+                else:
+                    subprocess.run(["lp", path])
+        except Exception as e:
+            messagebox.showerror("Print error", str(e))
+
+    def _error_print(self, msg):
+        self.print_btn.config(state="normal")
+        self.status_var.set(f"Error: {msg}")
+        messagebox.showerror("Print error", msg)
 
 
 if __name__ == "__main__":

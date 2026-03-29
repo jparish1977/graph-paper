@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Graph Paper Builder — Double Dungeons Edition</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<aside id="sidebar">
+  <h2>Graph Paper Builder — Double Dungeons Edition</h2>
+
+  <div class="section">
+    <div class="section-title">Double Dungeons Preset (approximate)</div>
+    <div class="section-body">
+      <div class="field"><label>Dungeon:</label><select id="dng-select" style="flex:1"></select></div>
+      <div class="btn-row"><button class="sm" onclick="savePreset()">Save</button><button class="sm" onclick="deletePreset()">Delete</button></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Page Size</div>
+    <div class="section-body">
+      <div class="field"><label>Preset:</label><select id="page-preset" style="flex:1"></select></div>
+      <div class="field">
+        <div class="pair">
+          <label>W (in):</label><input type="number" id="width" value="8.5" min="1" max="60" step="0.01">
+          <label>H (in):</label><input type="number" id="height" value="11" min="1" max="60" step="0.01">
+        </div>
+      </div>
+      <div class="field"><label>Margin (in):</label><input type="number" id="margin" value="0.25" min="0" max="2" step="0.0625"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Grid Options</div>
+    <div class="section-body">
+      <div class="field">
+        <label>Grid spacing:</label>
+        <select id="grid-size">
+          <option value="0.125">1/8 inch</option>
+          <option value="0.1875">3/16 inch</option>
+          <option value="0.25" selected>1/4 inch</option>
+          <option value="0.3125">5/16 inch</option>
+          <option value="0.5">1/2 inch</option>
+          <option value="1">1 inch</option>
+        </select>
+      </div>
+      <div class="field"><label class="long">Heavy line every N cells:</label><input type="number" id="box-cells" value="4" min="1" max="200"></div>
+      <div class="field"><label>Line thickness:</label><input type="number" id="line-thickness" value="1" min="1" max="10"></div>
+      <div class="field"><label>Heavy thickness:</label><input type="number" id="heavy-thickness" value="2" min="1" max="10"></div>
+      <div class="field"><input type="checkbox" id="dashed" checked><label for="dashed" style="flex:none;margin-left:4px">Dashed lines</label></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Colors</div>
+    <div class="section-body">
+      <div class="field"><label>Grid lines:</label><input type="color" id="line-color" value="#add8e6"></div>
+      <div class="field"><label>Heavy lines:</label><input type="color" id="heavy-color" value="#add8e6"></div>
+      <div class="field"><label>Labels / border:</label><input type="color" id="index-color" value="#283c78"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Title Block</div>
+    <div class="section-body">
+      <div class="field"><label>Line 1:</label><input type="text" id="title1" value="Ginger Plays Games"></div>
+      <div class="field"><label>Line 2:</label><input type="text" id="title2" value="Double Dungeons"></div>
+      <div class="field"><label>Line 3:</label><input type="text" id="title3" value=""></div>
+      <div class="field"><label>Line 4:</label><input type="text" id="title4" value=""></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Multi-Sheet Assembly</div>
+    <div class="section-body">
+      <div class="field">
+        <div class="pair">
+          <label>Sheets wide:</label><input type="number" id="sheets-wide" value="1" min="1" max="10">
+          <label>tall:</label><input type="number" id="sheets-tall" value="1" min="1" max="10">
+        </div>
+      </div>
+      <div class="field">
+        <label>Tab overlap:</label>
+        <select id="tab-size">
+          <option value="0.125">1/8 inch (3mm)</option>
+          <option value="0.25" selected>1/4 inch (6mm)</option>
+          <option value="0.5">1/2 inch (13mm)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Assembly method:</label>
+        <select id="tab-style">
+          <option value="tape">Tape under</option>
+          <option value="insert">Tab &amp; slot insert</option>
+        </select>
+      </div>
+      <div class="hint" id="tab-hint">Cut shaded edge, tape under neighbour sheet.</div>
+      <div class="field">
+        <label>Dungeon size (sq):</label>
+        <div class="pair">
+          <input type="number" id="dung-cols" value="" min="1" max="500" placeholder="cols">
+          <span>&times;</span>
+          <input type="number" id="dung-rows" value="" min="1" max="500" placeholder="rows">
+        </div>
+      </div>
+      <div class="field">
+        <label>Start position:</label>
+        <div class="pair">
+          <label>col</label><input type="number" id="start-col" value="" min="1" placeholder="—">
+          <label>row</label><input type="number" id="start-row" value="" min="1" placeholder="—">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Text &amp; Quality</div>
+    <div class="section-body">
+      <div class="field"><label>Font size (px):</label><input type="number" id="font-size" value="" min="1" max="200" placeholder="auto"></div>
+      <div class="field"><label>DPI:</label><input type="number" id="dpi" value="150" min="72" max="600"></div>
+      <div class="field">
+        <input type="checkbox" id="notes-enabled">
+        <label for="notes-enabled" style="flex:none;margin-left:4px">Notes area</label>
+        <input type="number" id="notes-height" value="1.5" min="0.25" max="5" step="0.25" disabled style="width:50px;margin-left:6px">
+        <span class="unit">in</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Output</div>
+    <div class="section-body">
+      <div class="btn-row">
+        <button class="primary" onclick="generateAndSave()">Generate &amp; Save</button>
+        <button onclick="printSheets()">Print…</button>
+      </div>
+      <div id="status">Ready.</div>
+    </div>
+  </div>
+</aside>
+
+<main id="main">
+  <div id="preview-header">Preview</div>
+  <div id="preview-wrap"><canvas id="preview-canvas"></canvas></div>
+  <div id="preview-footer">
+    <button onclick="refreshPreview()">Refresh Preview</button>
+    <button onclick="prevSheet()" id="btn-prev">&#9664;</button>
+    <span id="sheet-label" style="font-size:11px;color:#444;min-width:60px;text-align:center"></span>
+    <button onclick="nextSheet()" id="btn-next">&#9654;</button>
+    <span id="preview-info"></span>
+  </div>
+</main>
+
+<script src="renderer.js"></script>
+<script src="ui-app.js"></script>
+</body>
+</html>

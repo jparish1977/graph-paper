@@ -36,6 +36,19 @@ def draw_dashed_line(draw, start, end, color, width=1, dash_length=8, gap_length
         pos += dash_length + gap_length
 
 
+def _draw_rotated_label(img, text, fill, font, cx, cy):
+    """Draw text rotated 90°, centered at (cx, cy), within the image bounds."""
+    tmp = Image.new("RGBA", (1, 1))
+    bbox = ImageDraw.Draw(tmp).textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    txt_img = Image.new("RGBA", (tw + 4, th + 4), (0, 0, 0, 0))
+    ImageDraw.Draw(txt_img).text((2, 2), text, fill=fill, font=font)
+    rotated = txt_img.rotate(90, expand=True)
+    px = max(0, cx - rotated.width // 2)
+    py = max(0, cy - rotated.height // 2)
+    img.paste(rotated, (px, py), rotated)
+
+
 def generate_graph_paper(
     width_in=24, height_in=36, dpi=300,
     line_color=(173, 216, 230), heavy_color=(173, 216, 230),
@@ -47,12 +60,14 @@ def generate_graph_paper(
     notes_bottom_in=0.0,
     start_col=None, start_row=None,    # 1-indexed grid squares from top-left
     dungeon_cols=None, dungeon_rows=None,  # total dungeon size in grid squares
+    tab_style="tape",   # "tape" | "insert"
 ):
     width_px  = int(width_in  * dpi)
     height_px = int(height_in * dpi)
     margin_px = int(margin_in * dpi)
-    grid_px   = max(1, int(grid_size_in * dpi))
-    box_px    = max(grid_px, int(box_size_in * dpi))
+    grid_px      = max(1, int(grid_size_in * dpi))
+    box_px       = max(grid_px, int(box_size_in * dpi))
+    grid_per_box = max(1, round(box_px / grid_px))  # grid steps per box interval
     tab_px    = int(tab_in * dpi) if (sheets_wide > 1 or sheets_tall > 1) else 0
     # notes only on the bottom row of sheets
     notes_px  = int(notes_bottom_in * dpi) if sheet_row == sheets_tall - 1 else 0
@@ -60,9 +75,27 @@ def generate_graph_paper(
     dash_length = max(4, int(dpi * 0.045))
     gap_length  = dash_length
 
+    def seam_tabs(seam_top, seam_bot):
+        """Return list of (gap_top, tab_top, tab_bot, gap_bot) in px."""
+        seam_len   = seam_bot - seam_top
+        period     = max(grid_px * 4, int(box_px * 1.2))
+        n_periods  = max(2, round(seam_len / period))
+        act_period = seam_len / n_periods
+        tab_h      = round(act_period * 0.5)
+        tabs = []
+        for i in range(n_periods):
+            gap_top = seam_top + i * act_period
+            tab_top = gap_top + round((act_period - tab_h) / 2)
+            tabs.append((gap_top, tab_top, tab_top + tab_h, gap_top + act_period))
+        return tabs
+
     if font_size is None:
         font_size = max(1, int(box_px * 0.18))
     font = _scaled_font(font_size)
+
+    label_font_size = max(1, grid_px // 2)
+    label_font  = _scaled_font(label_font_size)
+    label_color = (180, 180, 180)
 
     # title block font: fit n_lines inside one box height
     if title_lines is None:
@@ -103,14 +136,39 @@ def generate_graph_paper(
     draw = ImageDraw.Draw(img)
 
     # ── tab zone shading ─────────────────────────────────────────────────
-    tab_fill = (210, 230, 255)
+    tab_fill  = (210, 230, 255)
+    slot_fill = (220, 255, 220)
     if tab_px > 0:
         if sheet_col > 0:
-            draw.rectangle([margin_px, margin_px,
-                            margin_px + tab_px, grid_bottom], fill=tab_fill)
+            if tab_style == "tape":
+                draw.rectangle([margin_px, margin_px,
+                                margin_px + tab_px, grid_bottom], fill=tab_fill)
+            else:
+                # shade only the gap sections (tabs stay, gaps get cut away)
+                seam_top = margin_px + tab_px if sheet_row > 0 else margin_px
+                for gt, tt, tb, gb in seam_tabs(seam_top, grid_bottom):
+                    if int(tt) > int(gt):
+                        draw.rectangle([margin_px, int(gt), margin_px + tab_px, int(tt)], fill=tab_fill)
+                    if int(gb) > int(tb):
+                        draw.rectangle([margin_px, int(tb), margin_px + tab_px, int(gb)], fill=tab_fill)
         if sheet_row > 0:
-            draw.rectangle([margin_px, margin_px,
-                            width_px - margin_px, margin_px + tab_px], fill=tab_fill)
+            if tab_style == "tape":
+                draw.rectangle([margin_px, margin_px,
+                                width_px - margin_px, margin_px + tab_px], fill=tab_fill)
+            else:
+                seam_left = margin_px + tab_px if sheet_col > 0 else margin_px
+                for gl, tl, tr, gr in seam_tabs(seam_left, width_px - margin_px):
+                    if int(tl) > int(gl):
+                        draw.rectangle([int(gl), margin_px, int(tl), margin_px + tab_px], fill=tab_fill)
+                    if int(gr) > int(tr):
+                        draw.rectangle([int(tr), margin_px, int(gr), margin_px + tab_px], fill=tab_fill)
+        if tab_style == "insert":
+            if sheet_col < sheets_wide - 1:
+                draw.rectangle([width_px - margin_px - tab_px, margin_px,
+                                width_px - margin_px, grid_bottom], fill=slot_fill)
+            if sheet_row < sheets_tall - 1:
+                draw.rectangle([margin_px, grid_bottom - tab_px,
+                                width_px - margin_px, grid_bottom], fill=slot_fill)
 
     # ── grid lines ───────────────────────────────────────────────────────
     def draw_line(start, end, color, w):
@@ -123,7 +181,7 @@ def generate_graph_paper(
     x = grid_x0
     while x <= width_px - margin_px:
         abs_x = (x - margin_px) + x_abs_base
-        if abs_x % box_px == 0:
+        if (abs_x // grid_px) % grid_per_box == 0:
             draw_line((x, margin_px), (x, grid_bottom), heavy_color, heavy_thickness)
         else:
             draw_line((x, margin_px), (x, grid_bottom), line_color, line_thickness)
@@ -132,66 +190,137 @@ def generate_graph_paper(
     y = grid_y0
     while y <= grid_bottom:
         abs_y = (y - margin_px) + y_abs_base
-        if abs_y % box_px == 0:
+        if (abs_y // grid_px) % grid_per_box == 0:
             draw_line((margin_px, y), (width_px - margin_px, y), heavy_color, heavy_thickness)
         else:
             draw_line((margin_px, y), (width_px - margin_px, y), line_color, line_thickness)
         y += grid_px
 
-    # ── cut guides on tab zones ───────────────────────────────────────────
+    # ── cut / insert guides ───────────────────────────────────────────────
     if tab_px > 0:
         cut_color  = (200, 40, 40)
+        slot_color = (30, 140, 30)
         cut_w      = max(1, heavy_thickness)
         guide_dash = max(4, dpi // 15)
 
-        if sheet_col > 0:
-            cx = margin_px + tab_px
-            draw_dashed_line(draw, (cx, 0), (cx, height_px),
-                             cut_color, width=cut_w,
-                             dash_length=guide_dash, gap_length=guide_dash)
-            draw.text((margin_px + 2, height_px // 2 - font_size),
-                      "CUT", fill=cut_color, font=font)
-            draw.text((margin_px + 2, height_px // 2),
-                      "TAPE UNDER", fill=cut_color, font=font)
+        if tab_style == "tape":
+            if sheet_col > 0:
+                cx = margin_px + tab_px
+                draw_dashed_line(draw, (cx, 0), (cx, height_px),
+                                 cut_color, width=cut_w,
+                                 dash_length=guide_dash, gap_length=guide_dash)
+                _draw_rotated_label(img, "CUT / TAPE UNDER", cut_color, font,
+                                    cx=margin_px + tab_px // 2, cy=height_px // 2)
+            if sheet_row > 0:
+                cy = margin_px + tab_px
+                draw_dashed_line(draw, (0, cy), (width_px, cy),
+                                 cut_color, width=cut_w,
+                                 dash_length=guide_dash, gap_length=guide_dash)
+                draw.text((width_px // 2, margin_px + tab_px // 2),
+                          "CUT / TAPE UNDER", fill=cut_color, font=font, anchor="mm")
 
-        if sheet_row > 0:
-            cy = margin_px + tab_px
-            draw_dashed_line(draw, (0, cy), (width_px, cy),
-                             cut_color, width=cut_w,
-                             dash_length=guide_dash, gap_length=guide_dash)
-            draw.text((width_px // 2 - font_size * 3, margin_px + 2),
-                      "CUT / TAPE UNDER", fill=cut_color, font=font)
+        else:  # "insert"
+            # LEFT edge — comb cut guide
+            if sheet_col > 0:
+                cx = margin_px + tab_px
+                seam_top = margin_px + tab_px if sheet_row > 0 else margin_px
+                for gap_top, tab_top, tab_bot, gap_bot in seam_tabs(seam_top, grid_bottom):
+                    draw_dashed_line(draw, (cx, int(gap_top)), (cx, int(tab_top)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (cx, int(tab_bot)), (cx, int(gap_bot)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (margin_px, int(tab_top)), (cx, int(tab_top)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (margin_px, int(tab_bot)), (cx, int(tab_bot)),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                _draw_rotated_label(img, "CUT TABS / INSERT", cut_color, font,
+                                    cx=margin_px + tab_px // 2, cy=height_px // 2)
+
+            # TOP edge — comb cut guide
+            if sheet_row > 0:
+                cy = margin_px + tab_px
+                seam_left = margin_px + tab_px if sheet_col > 0 else margin_px
+                for gap_l, tab_l, tab_r, gap_r in seam_tabs(seam_left, width_px - margin_px):
+                    draw_dashed_line(draw, (int(gap_l), cy), (int(tab_l), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (int(tab_r), cy), (int(gap_r), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (int(tab_l), margin_px), (int(tab_l), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                    draw_dashed_line(draw, (int(tab_r), margin_px), (int(tab_r), cy),
+                                     cut_color, width=cut_w,
+                                     dash_length=guide_dash, gap_length=guide_dash)
+                draw.text((width_px // 2, margin_px + tab_px // 2),
+                          "CUT TABS / INSERT", fill=cut_color, font=font, anchor="mm")
+
+            # RIGHT edge — slot marks
+            if sheet_col < sheets_wide - 1:
+                slot_x0 = width_px - margin_px - tab_px
+                slot_x1 = width_px - margin_px
+                seam_top = margin_px + tab_px if sheet_row > 0 else margin_px
+                for _, tab_top, tab_bot, _ in seam_tabs(seam_top, grid_bottom):
+                    draw.rectangle([slot_x0, int(tab_top), slot_x1, int(tab_bot)],
+                                   outline=slot_color, width=cut_w)
+                _draw_rotated_label(img, "CUT SLOTS", slot_color, font,
+                                    cx=slot_x0 + tab_px // 2, cy=grid_bottom // 2)
+
+            # BOTTOM edge — slot marks
+            if sheet_row < sheets_tall - 1:
+                slot_y0 = grid_bottom - tab_px
+                slot_y1 = grid_bottom
+                seam_left = margin_px + tab_px if sheet_col > 0 else margin_px
+                for _, tab_l, tab_r, _ in seam_tabs(seam_left, width_px - margin_px):
+                    draw.rectangle([int(tab_l), slot_y0, int(tab_r), slot_y1],
+                                   outline=slot_color, width=cut_w)
+                draw.text((width_px // 2, slot_y0 + tab_px // 2),
+                          "CUT SLOTS", fill=slot_color, font=font, anchor="mm")
 
     # ── index labels ─────────────────────────────────────────────────────
-    label_y = margin_px // 2
+    label_cy = margin_px // 2           # vertical centre for column labels
+    label_cx = margin_px // 2           # horizontal centre for row labels
+
     x = grid_x0
     while x <= width_px - margin_px:
         abs_x = (x - margin_px) + x_abs_base
-        if abs_x % box_px == 0:
-            draw.text((x + 2, label_y), index_label_from_num(abs_x // box_px),
-                      fill=index_color, font=font)
+        if (abs_x // grid_px) % grid_per_box == 0:
+            cx = x + grid_px // 2
+            draw.text((cx, label_cy), index_label_from_num(abs_x // grid_px),
+                      fill=label_color, font=label_font, anchor="mm")
         x += grid_px
 
-    label_x = 2
     y = grid_y0
     while y <= grid_bottom:
         abs_y = (y - margin_px) + y_abs_base
-        if abs_y % box_px == 0:
-            draw.text((label_x, y - font_size // 2), str(abs_y // box_px + 1),
-                      fill=index_color, font=font)
+        if (abs_y // grid_px) % grid_per_box == 0:
+            cy = y + grid_px // 2
+            draw.text((label_cx, cy), str(abs_y // grid_px + 1),
+                      fill=label_color, font=label_font, anchor="mm")
         y += grid_px
 
     # ── title block — only on top-left sheet ─────────────────────────────
     if sheet_col == 0 and sheet_row == 0:
         block_w = box_px * 2
         block_h = box_px
-        draw.rectangle([margin_px, margin_px,
-                        margin_px + block_w, margin_px + block_h],
-                       outline=(0, 0, 0), width=max(1, heavy_thickness))
-        text_y = margin_px + pad_inner
-        for line in title_lines:
-            draw.text((margin_px + pad_inner, text_y), line,
-                      fill=(0, 0, 0), font=title_font)
+        radius = max(2, box_px // 8)
+        draw.rounded_rectangle([margin_px, margin_px,
+                                 margin_px + block_w, margin_px + block_h],
+                                radius=radius, outline=(0, 0, 0),
+                                width=max(1, heavy_thickness))
+        block_cx = margin_px + block_w // 2
+        active_lines = [ln for ln in title_lines if ln.strip()]
+        n_active = max(1, len(active_lines))
+        total_text_h = n_active * title_font_size + (n_active - 1) * line_gap
+        text_y = margin_px + (block_h - total_text_h) // 2
+        for line in active_lines:
+            draw.text((block_cx, text_y + title_font_size // 2), line,
+                      fill=(0, 0, 0), font=title_font, anchor="mm")
             text_y += title_font_size + line_gap
 
     # ── sheet label (bottom-right, inside margin) ─────────────────────────
@@ -199,7 +328,7 @@ def generate_graph_paper(
         sheet_label = f"Sheet {index_label_from_num(sheet_col)}{sheet_row + 1}"
         draw.text((width_px - margin_px - box_px,
                    height_px - margin_px - font_size - 2),
-                  sheet_label, fill=index_color, font=font)
+                  sheet_label, fill=(220, 220, 220), font=font)
 
     # ── dungeon border + start marker ────────────────────────────────────
     # Dungeon origin: one box below top margin (clears title block), centered
@@ -237,10 +366,43 @@ def generate_graph_paper(
             if y0 < y1:
                 draw.line([(x, y0), (x, y1)], fill=border_color, width=border_w)
 
-        if sy0 <= ty <= sy1: hline(ty, lx, rx)
-        if sy0 <= by <= sy1: hline(by, lx, rx)
-        if sx0 <= lx <= sx1: vline(lx, ty, by)
-        if sx0 <= rx <= sx1: vline(rx, ty, by)
+        if sy0 <= ty <= sy1:
+            hline(ty, lx, rx)
+        if sy0 <= by <= sy1:
+            hline(by, lx, rx)
+        if sx0 <= lx <= sx1:
+            vline(lx, ty, by)
+        if sx0 <= rx <= sx1:
+            vline(rx, ty, by)
+
+        # ── dungeon-relative labels ───────────────────────────────────────
+        dlabel_color = index_color
+
+        # column letters just above the top border
+        if sy0 <= ty <= sy1:
+            ly = ty - grid_px // 2
+            if ly >= 0:
+                x = lx
+                while x < rx:
+                    if sx0 <= x + grid_px // 2 <= sx1:
+                        col_idx = (x - lx) // grid_px
+                        draw.text((x + grid_px // 2, ly),
+                                  index_label_from_num(col_idx),
+                                  fill=dlabel_color, font=label_font, anchor="mm")
+                    x += grid_px
+
+        # row numbers just left of the left border
+        if sx0 <= lx <= sx1:
+            lx2 = lx - grid_px // 2
+            if lx2 >= 0:
+                y = ty
+                while y < by:
+                    if sy0 <= y + grid_px // 2 <= sy1:
+                        row_idx = (y - ty) // grid_px + 1
+                        draw.text((lx2, y + grid_px // 2),
+                                  str(row_idx),
+                                  fill=dlabel_color, font=label_font, anchor="mm")
+                    y += grid_px
     else:
         dung_x_off = 0
         dung_y_off = 0
@@ -265,7 +427,8 @@ def generate_graph_paper(
         rule_px = max(grid_px, int(0.25 * dpi))
         draw.line([(margin_px, grid_bottom), (width_px - margin_px, grid_bottom)],
                   fill=(0, 0, 0), width=max(1, heavy_thickness))
-        draw.text((margin_px + pad_inner, grid_bottom + pad_inner),
+        notes_label_x = margin_px + (tab_px if sheet_col > 0 else 0) + pad_inner
+        draw.text((notes_label_x, grid_bottom + pad_inner),
                   "Notes", fill=index_color, font=font)
         y = grid_bottom + rule_px
         while y <= height_px - margin_px:
