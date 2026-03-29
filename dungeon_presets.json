@@ -1,17 +1,141 @@
 {
-  "D1  (\u226226\u00d726) \u00b7 Letter":             {"page_w": 8.5, "page_h": 11,  "notes_in": 1.5, "dungeon_cols": 26,  "dungeon_rows": 26,  "start_col": 2,    "start_row": 11},
-  "D2  (\u226226\u00d726) \u00b7 Letter":             {"page_w": 8.5, "page_h": 11,  "notes_in": 1.5, "dungeon_cols": 26,  "dungeon_rows": 26,  "start_col": 21,   "start_row": 15},
-  "D3  (\u226226\u00d726) \u00b7 Letter":             {"page_w": 8.5, "page_h": 11,  "notes_in": 1.5, "dungeon_cols": 26,  "dungeon_rows": 26,  "start_col": 23,   "start_row": 23},
-  "D4  (\u226226\u00d726) \u00b7 Letter":             {"page_w": 8.5, "page_h": 11,  "notes_in": 1.5, "dungeon_cols": 26,  "dungeon_rows": 26,  "start_col": 3,    "start_row": 7},
-  "D5  (\u226226\u00d726) \u00b7 Letter":             {"page_w": 8.5, "page_h": 11,  "notes_in": 1.5, "dungeon_cols": 26,  "dungeon_rows": 26,  "start_col": 1,    "start_row": 26},
-  "D6\u20138  (\u226226\u00d726) \u00b7 Letter":       {"page_w": 8.5, "page_h": 11,  "notes_in": 1.5, "dungeon_cols": 26,  "dungeon_rows": 26,  "start_col": null, "start_row": null},
-  "D9\u201314 (\u226240\u00d730) \u00b7 Letter landscape": {"page_w": 11,  "page_h": 8.5, "notes_in": 1.5, "dungeon_cols": 40,  "dungeon_rows": 30,  "start_col": null, "start_row": null, "grid_size": "3/16 inch", "sheets_wide": 1, "sheets_tall": 1},
-  "D15\u201318 (\u226262\u00d748) \u00b7 Letter":      {"page_w": 8.5, "page_h": 11,  "notes_in": 1.0, "dungeon_cols": 62,  "dungeon_rows": 48,  "start_col": null, "start_row": null, "grid_size": "3/16 inch", "sheets_wide": 2, "sheets_tall": 2},
-  "D15\u201318 (\u226262\u00d748) \u00b7 T125":        {"page_w": 16,  "page_h": 13,  "notes_in": 2.0, "dungeon_cols": 62,  "dungeon_rows": 48,  "start_col": null, "start_row": null, "grid_size": "3/16 inch"},
-  "D19\u201320 (\u226284\u00d7110) \u00b7 Letter":     {"page_w": 8.5, "page_h": 11,  "notes_in": 0.5, "dungeon_cols": 84,  "dungeon_rows": 110, "start_col": null, "start_row": null},
-  "D19\u201320 (\u226284\u00d7110) \u00b7 T125":       {"page_w": 22,  "page_h": 28,  "notes_in": 2.0, "dungeon_cols": 84,  "dungeon_rows": 110, "start_col": null, "start_row": null},
-  "D21   (\u2248115\u00d7115) \u00b7 Letter":          {"page_w": 8.5, "page_h": 11,  "notes_in": 0.5, "dungeon_cols": 115, "dungeon_rows": 115, "start_col": null, "start_row": null},
-  "D21   (\u2248115\u00d7115) \u00b7 T125":           {"page_w": 24,  "page_h": 30,  "notes_in": 1.0, "dungeon_cols": 115, "dungeon_rows": 115, "start_col": null, "start_row": null},
-  "D22   (\u2248107\u00d7114) \u00b7 Letter":          {"page_w": 8.5, "page_h": 11,  "notes_in": 0.5, "dungeon_cols": 107, "dungeon_rows": 114, "start_col": null, "start_row": null},
-  "D22   (\u2248107\u00d7114) \u00b7 T125":           {"page_w": 24,  "page_h": 30,  "notes_in": 1.0, "dungeon_cols": 107, "dungeon_rows": 114, "start_col": null, "start_row": null}
+  "D1  (≢26×26) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 1.5,
+    "dungeon_cols": 26,
+    "dungeon_rows": 26,
+    "start_col": 2,
+    "start_row": 11
+  },
+  "D2  (≢26×26) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 1.5,
+    "dungeon_cols": 26,
+    "dungeon_rows": 26,
+    "start_col": 21,
+    "start_row": 15
+  },
+  "D3  (≢26×26) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 1.5,
+    "dungeon_cols": 26,
+    "dungeon_rows": 26,
+    "start_col": 23,
+    "start_row": 23
+  },
+  "D4  (≢26×26) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 1.5,
+    "dungeon_cols": 26,
+    "dungeon_rows": 26,
+    "start_col": 3,
+    "start_row": 7
+  },
+  "D5  (≢26×26) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 1.5,
+    "dungeon_cols": 26,
+    "dungeon_rows": 26,
+    "start_col": 1,
+    "start_row": 26
+  },
+  "D6–8  (≢26×26) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 1.5,
+    "dungeon_cols": 26,
+    "dungeon_rows": 26,
+    "start_col": null,
+    "start_row": null
+  },
+  "D9–14 (≢40×30) · Letter landscape": {
+    "page_w": 11,
+    "page_h": 8.5,
+    "notes_in": 1.5,
+    "dungeon_cols": 40,
+    "dungeon_rows": 30,
+    "start_col": null,
+    "start_row": null,
+    "grid_size": "3/16 inch",
+    "sheets_wide": 1,
+    "sheets_tall": 1
+  },
+  "D15–18 (≢62×48) · Letter": {
+    "page_w": 11.0,
+    "page_h": 8.5,
+    "notes_in": 0.0,
+    "dungeon_cols": 62,
+    "dungeon_rows": 48,
+    "start_col": 1,
+    "start_row": 1
+  },
+  "D15–18 (≢62×48) · T125": {
+    "page_w": 16,
+    "page_h": 13,
+    "notes_in": 2.0,
+    "dungeon_cols": 62,
+    "dungeon_rows": 48,
+    "start_col": null,
+    "start_row": null,
+    "grid_size": "3/16 inch"
+  },
+  "D19–20 (≢84×110) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 0.5,
+    "dungeon_cols": 84,
+    "dungeon_rows": 110,
+    "start_col": null,
+    "start_row": null
+  },
+  "D19–20 (≢84×110) · T125": {
+    "page_w": 22,
+    "page_h": 28,
+    "notes_in": 2.0,
+    "dungeon_cols": 84,
+    "dungeon_rows": 110,
+    "start_col": null,
+    "start_row": null
+  },
+  "D21   (≈115×115) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 0.5,
+    "dungeon_cols": 115,
+    "dungeon_rows": 115,
+    "start_col": null,
+    "start_row": null
+  },
+  "D21   (≈115×115) · T125": {
+    "page_w": 24,
+    "page_h": 30,
+    "notes_in": 1.0,
+    "dungeon_cols": 115,
+    "dungeon_rows": 115,
+    "start_col": null,
+    "start_row": null
+  },
+  "D22   (≈107×114) · Letter": {
+    "page_w": 8.5,
+    "page_h": 11,
+    "notes_in": 0.5,
+    "dungeon_cols": 107,
+    "dungeon_rows": 114,
+    "start_col": null,
+    "start_row": null
+  },
+  "D22   (≈107×114) · T125": {
+    "page_w": 24,
+    "page_h": 30,
+    "notes_in": 1.0,
+    "dungeon_cols": 107,
+    "dungeon_rows": 114,
+    "start_col": null,
+    "start_row": null
+  }
 }

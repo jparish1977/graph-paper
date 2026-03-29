@@ -63,6 +63,15 @@ TAB_SIZES = {
 PREVIEW_MAX_PX = 1200
 
 
+def parse_fraction(s):
+    """Parse '3/16' or '0.1875' into a float."""
+    s = s.strip()
+    if '/' in s:
+        num, den = s.split('/', 1)
+        return float(num.strip()) / float(den.strip())
+    return float(s)
+
+
 def rgb_to_hex(r, g, b):
     return f"#{r:02x}{g:02x}{b:02x}"
 
@@ -183,7 +192,17 @@ class App(tk.Tk):
         gf = ttk.LabelFrame(left, text="Grid Options", padding=6)
         gf.pack(fill="x", **pad)
 
-        self.grid_size_var = make_combo(gf, 0, "Grid spacing:", list(GRID_SIZES.keys()), "1/4 inch")
+        tk.Label(gf, text="Grid spacing:", anchor="w").grid(row=0, column=0, sticky="w", padx=8, pady=3)
+        self.grid_size_var = tk.StringVar(value="1/4 inch")
+        grid_cb = ttk.Combobox(gf, textvariable=self.grid_size_var,
+                                values=list(GRID_SIZES.keys()) + ["Custom…"],
+                                state="readonly", width=14)
+        grid_cb.grid(row=0, column=1, sticky="w", padx=8, pady=3)
+        self.custom_grid_var = tk.StringVar(value="")
+        self._custom_grid_entry = ttk.Entry(gf, textvariable=self.custom_grid_var, width=8)
+        self._custom_grid_entry.grid(row=0, column=2, sticky="w", padx=(0, 8), pady=3)
+        self._custom_grid_entry.grid_remove()
+        grid_cb.bind("<<ComboboxSelected>>", self._on_grid_size_change)
         tk.Label(gf, text="Heavy line every N cells:", anchor="w").grid(row=1, column=0, sticky="w", padx=8, pady=3)
         self.box_cells_var = tk.StringVar(value="4")
         ttk.Spinbox(gf, from_=1, to=200, textvariable=self.box_cells_var, width=5).grid(
@@ -239,19 +258,19 @@ class App(tk.Tk):
         self._tab_hint.grid(row=3, column=0, columnspan=4, sticky="w", padx=8, pady=2)
         self.tab_style_var.trace_add("write", self._on_tab_style)
 
-        tk.Label(mf, text="Dungeon size (squares):", anchor="w").grid(row=3, column=0, sticky="w", padx=8, pady=3)
+        tk.Label(mf, text="Dungeon size (squares):", anchor="w").grid(row=4, column=0, sticky="w", padx=8, pady=3)
         self.dungeon_cols_var = tk.StringVar(value="")
-        ttk.Entry(mf, textvariable=self.dungeon_cols_var, width=5).grid(row=3, column=1, sticky="w", padx=8, pady=3)
-        tk.Label(mf, text="×", anchor="w").grid(row=3, column=2, sticky="w")
+        ttk.Entry(mf, textvariable=self.dungeon_cols_var, width=5).grid(row=4, column=1, sticky="w", padx=8, pady=3)
+        tk.Label(mf, text="×", anchor="w").grid(row=4, column=2, sticky="w")
         self.dungeon_rows_var = tk.StringVar(value="")
-        ttk.Entry(mf, textvariable=self.dungeon_rows_var, width=5).grid(row=3, column=3, sticky="w", padx=8, pady=3)
+        ttk.Entry(mf, textvariable=self.dungeon_rows_var, width=5).grid(row=4, column=3, sticky="w", padx=8, pady=3)
 
-        tk.Label(mf, text="Start square col:", anchor="w").grid(row=4, column=0, sticky="w", padx=8, pady=3)
+        tk.Label(mf, text="Start square col:", anchor="w").grid(row=5, column=0, sticky="w", padx=8, pady=3)
         self.start_col_var = tk.StringVar(value="")
-        ttk.Entry(mf, textvariable=self.start_col_var, width=5).grid(row=4, column=1, sticky="w", padx=8, pady=3)
-        tk.Label(mf, text="row:", anchor="w").grid(row=4, column=2, sticky="w", padx=8, pady=3)
+        ttk.Entry(mf, textvariable=self.start_col_var, width=5).grid(row=5, column=1, sticky="w", padx=8, pady=3)
+        tk.Label(mf, text="row:", anchor="w").grid(row=5, column=2, sticky="w", padx=8, pady=3)
         self.start_row_var = tk.StringVar(value="")
-        ttk.Entry(mf, textvariable=self.start_row_var, width=5).grid(row=4, column=3, sticky="w", padx=8, pady=3)
+        ttk.Entry(mf, textvariable=self.start_row_var, width=5).grid(row=5, column=3, sticky="w", padx=8, pady=3)
 
         # Text & Quality ──────────────────────────────────────────────────────
         qf = ttk.LabelFrame(left, text="Text & Quality", padding=6)
@@ -332,7 +351,7 @@ class App(tk.Tk):
     # ── traces ────────────────────────────────────────────────────────────────
     def _wire_traces(self):
         watch = [self.width_var, self.height_var, self.margin_var, self.font_size_var,
-                 self.dpi_var, self.output_var, self.grid_size_var, self.box_cells_var,
+                 self.dpi_var, self.output_var, self.grid_size_var, self.custom_grid_var, self.box_cells_var,
                  self.preset_var, self.line_thickness_var, self.heavy_thickness_var,
                  self.format_var, self.sheets_wide_var, self.sheets_tall_var,
                  self.tab_size_var, self.notes_bottom_var,
@@ -379,6 +398,23 @@ class App(tk.Tk):
         else:
             self._tab_hint.config(text="Cut shaded edge, tape under neighbour sheet.")
         self._schedule_preview()
+
+    def _on_grid_size_change(self, _=None):
+        if self.grid_size_var.get() == "Custom…":
+            self._custom_grid_entry.grid()
+            self._custom_grid_entry.focus()
+        else:
+            self._custom_grid_entry.grid_remove()
+        self._schedule_preview()
+
+    def _get_grid_size(self):
+        sel = self.grid_size_var.get()
+        if sel == "Custom…":
+            try:
+                return parse_fraction(self.custom_grid_var.get())
+            except (ValueError, ZeroDivisionError):
+                return GRID_SIZES["1/4 inch"]
+        return GRID_SIZES.get(sel, GRID_SIZES["1/4 inch"])
 
     def _on_preset(self, _=None):
         dims = PAGE_PRESETS.get(self.preset_var.get())
@@ -450,7 +486,14 @@ class App(tk.Tk):
         self.dungeon_rows_var.set(str(drows) if drows else "")
         self.start_col_var.set(str(sc) if sc else "")
         self.start_row_var.set(str(sr) if sr else "")
-        self.grid_size_var.set(vals.get("grid_size", "1/4 inch"))
+        gs = vals.get("grid_size", "1/4 inch")
+        if gs in GRID_SIZES:
+            self.grid_size_var.set(gs)
+            self._custom_grid_entry.grid_remove()
+        else:
+            self.grid_size_var.set("Custom…")
+            self.custom_grid_var.set(gs)
+            self._custom_grid_entry.grid()
         self.preset_var.set("Custom")
         if "sheets_wide" in vals and "sheets_tall" in vals:
             self.sheets_wide_var.set(str(vals["sheets_wide"]))
@@ -465,7 +508,7 @@ class App(tk.Tk):
             height_in = float(self.height_var.get())
             margin_in = float(self.margin_var.get())
             notes_in  = float(self.notes_bottom_var.get() or 0)
-            grid_in    = GRID_SIZES[self.grid_size_var.get()]
+            grid_in    = self._get_grid_size()
             box_cells  = max(1, int(self.box_cells_var.get() or 4))
             box_in     = box_cells * grid_in
             dcols = int(self.dungeon_cols_var.get()) if self.dungeon_cols_var.get().strip() else None
@@ -524,8 +567,8 @@ class App(tk.Tk):
             "height_in":        height_in,
             "dpi":              dpi,
             "margin_in":        float(self.margin_var.get()),
-            "grid_size_in":     GRID_SIZES[self.grid_size_var.get()],
-            "box_size_in":      max(1, int(self.box_cells_var.get() or 4)) * GRID_SIZES[self.grid_size_var.get()],
+            "grid_size_in":     self._get_grid_size(),
+            "box_size_in":      max(1, int(self.box_cells_var.get() or 4)) * self._get_grid_size(),
             "font_size":        int(fs) if fs else None,
             "line_color":       tuple(self._line_color),
             "heavy_color":      tuple(self._heavy_color),

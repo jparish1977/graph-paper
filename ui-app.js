@@ -3,6 +3,19 @@
 
 let dungeonPresets = {};
 let previewScheduled = false;
+
+function parseFraction(s) {
+  s = (s || '').trim();
+  if (s.includes('/')) { const [n, d] = s.split('/'); return parseFloat(n) / parseFloat(d); }
+  return parseFloat(s);
+}
+
+// eslint-disable-next-line no-unused-vars -- called from HTML
+function toggleCustomGrid() {
+  const show = document.getElementById('grid-size').value === 'custom';
+  document.getElementById('grid-size-custom').style.display = show ? '' : 'none';
+  if (show) document.getElementById('grid-size-custom').focus();
+}
 let previewCol = null, previewRow = null;
 
 // ── Read params ───────────────────────────────────────────────────────────────
@@ -14,7 +27,11 @@ function readParams(dpiOverride) {
     heightIn:      parseFloat(document.getElementById('height').value)         || DEFAULTS.HEIGHT_IN,
     dpi:           dpiOverride || parseInt(document.getElementById('dpi').value) || DEFAULTS.DPI,
     marginIn:      parseFloat(document.getElementById('margin').value)         || DEFAULTS.MARGIN_IN,
-    gridSizeIn:    parseFloat(document.getElementById('grid-size').value)      || DEFAULTS.GRID_SIZE_IN,
+    gridSizeIn:    (() => {
+      const el = document.getElementById('grid-size');
+      if (el.value === 'custom') return parseFraction(document.getElementById('grid-size-custom').value) || DEFAULTS.GRID_SIZE_IN;
+      return parseFloat(el.value) || DEFAULTS.GRID_SIZE_IN;
+    })(),
     boxCells:      parseInt(document.getElementById('box-cells').value)        || DEFAULTS.BOX_CELLS,
     lineThickness: parseInt(document.getElementById('line-thickness').value)   || 1,
     heavyThickness:parseInt(document.getElementById('heavy-thickness').value)  || 2,
@@ -250,8 +267,15 @@ function onDungeonPreset() {
   if (q.dungeon_rows) document.getElementById('dung-rows').value = q.dungeon_rows;
   document.getElementById('start-col').value = q.start_col || '';
   document.getElementById('start-row').value = q.start_row || '';
-  if (q.grid_size && GRID_SIZE_MAP[q.grid_size])
-    document.getElementById('grid-size').value = GRID_SIZE_MAP[q.grid_size];
+  if (q.grid_size) {
+    if (GRID_SIZE_MAP[q.grid_size]) {
+      document.getElementById('grid-size').value = GRID_SIZE_MAP[q.grid_size];
+    } else {
+      document.getElementById('grid-size').value = 'custom';
+      document.getElementById('grid-size-custom').value = q.grid_size;
+    }
+    toggleCustomGrid();
+  }
 
   if (q.sheets_wide != null && q.sheets_tall != null) {
     document.getElementById('sheets-wide').value = q.sheets_wide;
@@ -276,7 +300,9 @@ function savePreset() {
     notes_in: params.notesBottomIn,
     dungeon_cols: params.dungeonCols, dungeon_rows: params.dungeonRows,
     start_col: params.startCol, start_row: params.startRow,
-    grid_size: gsEl.options[gsEl.selectedIndex].text,
+    grid_size: gsEl.value === 'custom'
+      ? document.getElementById('grid-size-custom').value
+      : gsEl.options[gsEl.selectedIndex].text,
     sheets_wide: params.sheetsWide, sheets_tall: params.sheetsTall,
   };
   savePresetsToStorage();
