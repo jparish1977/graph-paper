@@ -25,7 +25,17 @@ $gridSizes = [
 // ── handle form submission ────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $gridKey   = $_POST['grid_size']  ?? '1/4 inch';
-    $gridSzIn  = $gridSizes[$gridKey] ?? 0.25;
+    if ($gridKey === 'custom') {
+        $raw = trim($_POST['custom_grid_size'] ?? '0.25');
+        if (str_contains($raw, '/')) {
+            [$n, $d] = explode('/', $raw, 2);
+            $gridSzIn = floatval(trim($n)) / max(1e-9, floatval(trim($d)));
+        } else {
+            $gridSzIn = floatval($raw) ?: 0.25;
+        }
+    } else {
+        $gridSzIn  = $gridSizes[$gridKey] ?? 0.25;
+    }
     $boxCells  = max(1, (int) ($_POST['box_cells'] ?? 4));
 
     $params = [
@@ -146,11 +156,13 @@ $presetJson = json_encode(array_keys($presets));
   <div class="section">
     <div class="section-title">Grid</div>
     <div class="field"><label>Grid size:</label>
-      <select name="grid_size" id="grid_size">
+      <select name="grid_size" id="grid_size" onchange="toggleCustomGrid()">
         <?php foreach (array_keys($gridSizes) as $k) : ?>
         <option value="<?= $k ?>" <?= $k === '1/4 inch' ? 'selected' : '' ?>><?= $k ?></option>
         <?php endforeach; ?>
+        <option value="custom">Custom…</option>
       </select>
+      <input type="text" name="custom_grid_size" id="custom_grid_size" placeholder="e.g. 3/16" style="display:none;width:5em">
     </div>
     <div class="field"><label>Box interval (cells):</label>
       <input type="number" name="box_cells" id="box_cells" value="4" min="1" max="200"></div>
@@ -216,6 +228,12 @@ $presetJson = json_encode(array_keys($presets));
 const PRESETS = <?= json_encode($presets) ?>;
 const GRID_SIZES = <?= json_encode(array_keys($gridSizes)) ?>;
 
+function toggleCustomGrid() {
+  const show = document.getElementById('grid_size').value === 'custom';
+  document.getElementById('custom_grid_size').style.display = show ? '' : 'none';
+  if (show) document.getElementById('custom_grid_size').focus();
+}
+
 function applyPreset(name) {
   const p = PRESETS[name];
   if (!p) return;
@@ -226,7 +244,15 @@ function applyPreset(name) {
   document.getElementById('start_col').value    = p.start_col ?? '';
   document.getElementById('start_row').value    = p.start_row ?? '';
   if (p.notes_in !== undefined) document.getElementById('notes_in').value = p.notes_in;
-  if (p.grid_size) document.getElementById('grid_size').value = p.grid_size;
+  if (p.grid_size) {
+    if (GRID_SIZES.includes(p.grid_size)) {
+      document.getElementById('grid_size').value = p.grid_size;
+    } else {
+      document.getElementById('grid_size').value = 'custom';
+      document.getElementById('custom_grid_size').value = p.grid_size;
+    }
+    toggleCustomGrid();
+  }
   if (p.sheets_wide) document.getElementById('sheets_wide').value = p.sheets_wide;
   if (p.sheets_tall) document.getElementById('sheets_tall').value = p.sheets_tall;
 }

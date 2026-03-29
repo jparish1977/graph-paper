@@ -37,14 +37,16 @@
     <div class="section-body">
       <div class="field">
         <label>Grid spacing:</label>
-        <select id="grid-size">
+        <select id="grid-size" onchange="toggleCustomGrid()">
           <option value="0.125">1/8 inch</option>
           <option value="0.1875">3/16 inch</option>
           <option value="0.25" selected>1/4 inch</option>
           <option value="0.3125">5/16 inch</option>
           <option value="0.5">1/2 inch</option>
           <option value="1">1 inch</option>
+          <option value="custom">Custom…</option>
         </select>
+        <input type="text" id="grid-size-custom" placeholder="e.g. 3/16" style="display:none;width:5em">
       </div>
       <div class="field"><label class="long">Heavy line every N cells:</label><input type="number" id="box-cells" value="4" min="1" max="200"></div>
       <div class="field"><label>Line thickness:</label><input type="number" id="line-thickness" value="1" min="1" max="10"></div>
