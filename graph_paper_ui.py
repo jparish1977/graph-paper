@@ -114,8 +114,35 @@ class App(tk.Tk):
 
     # ── controls ─────────────────────────────────────────────────────────────
     def _build_controls(self):
-        left = tk.Frame(self)
-        left.grid(row=0, column=0, sticky="ns", padx=(12, 6), pady=8)
+        outer = tk.Frame(self)
+        outer.grid(row=0, column=0, sticky="ns", padx=(12, 6), pady=8)
+        outer.rowconfigure(0, weight=1)
+        outer.columnconfigure(0, weight=1)
+
+        vscroll = ttk.Scrollbar(outer, orient="vertical")
+        vscroll.grid(row=0, column=1, sticky="ns")
+
+        scroll_canvas = tk.Canvas(outer, yscrollcommand=vscroll.set,
+                                  highlightthickness=0)
+        scroll_canvas.grid(row=0, column=0, sticky="ns")
+        vscroll.config(command=scroll_canvas.yview)
+
+        left = tk.Frame(scroll_canvas)
+        win_id = scroll_canvas.create_window((0, 0), window=left, anchor="nw")
+
+        def _on_frame_configure(_):
+            scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
+            scroll_canvas.config(width=left.winfo_reqwidth())
+
+        left.bind("<Configure>", _on_frame_configure)
+
+        def _on_mousewheel(event):
+            scroll_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        scroll_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Linux scroll
+        scroll_canvas.bind_all("<Button-4>", lambda e: scroll_canvas.yview_scroll(-1, "units"))
+        scroll_canvas.bind_all("<Button-5>", lambda e: scroll_canvas.yview_scroll(1, "units"))
 
         pad = {"padx": 0, "pady": 4}
 
