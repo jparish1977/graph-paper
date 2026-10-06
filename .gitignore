@@ -3,3 +3,6 @@ __pycache__/
 *.png
 *.pdf
 tg16dd/
+# A documentation indexer's per-checkout settings, kept outside the repository
+# and linked in where it is used.
+.projectbook
