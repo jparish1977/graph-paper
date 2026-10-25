@@ -30,17 +30,17 @@ PAGE_PRESETS = {
     "Custom": None,
     "── Laserjet (Letter) ──": None,
     "Letter (8.5×11)":          (8.5,  11,    1.5),
-    "Letter Landscape (11×8.5)":(11,   8.5,   1.0),
+    "Letter Landscape (11×8.5)": (11,   8.5,   1.0),
     "── DesignJet T125 (24\" roll) ──": None,
     "T125 — 24×36":             (24,   36,    2.0),
     "T125 — 24×48":             (24,   48,    2.0),
     "T125 — 24×60":             (24,   60,    2.5),
     "── Other ──": None,
     "Tabloid (11×17)":          (11,   17,    1.5),
-    "Tabloid Landscape (17×11)":(17,   11,    1.5),
+    "Tabloid Landscape (17×11)": (17,   11,    1.5),
     "36×48":                    (36,   48,    2.5),
     "A4 (8.27×11.69)":          (8.27, 11.69, 1.5),
-    "A3 (11.69×16.54)":         (11.69,16.54, 1.5),
+    "A3 (11.69×16.54)":         (11.69, 16.54, 1.5),
 }
 
 GRID_SIZES = {
@@ -88,13 +88,13 @@ class App(tk.Tk):
         self.title("Graph Paper Builder — Double Dungeons Edition")
         self.resizable(True, True)
         self.minsize(820, 580)
-        self._preview_job   = None
+        self._preview_job = None
         self._preview_photo = None
-        self._preview_base  = None   # last rendered PIL image (fit to canvas at zoom=1)
-        self._preview_zoom  = 1.0
+        self._preview_base = None   # last rendered PIL image (fit to canvas at zoom=1)
+        self._preview_zoom = 1.0
         self._last_canvas_size = (0, 0)
 
-        self._line_color  = [173, 216, 230]
+        self._line_color = [173, 216, 230]
         self._heavy_color = [173, 216, 230]
         self._index_color = [40,  60,  120]
         self.dungeon_presets = load_dungeon_presets()
@@ -161,7 +161,7 @@ class App(tk.Tk):
         self.box_cells_var = tk.StringVar(value="4")
         ttk.Spinbox(gf, from_=1, to=200, textvariable=self.box_cells_var, width=5).grid(
             row=1, column=1, sticky="w", padx=8, pady=3)
-        self.line_thickness_var  = make_entry(gf, 2, "Line thickness:", "1", width=5)
+        self.line_thickness_var = make_entry(gf, 2, "Line thickness:", "1", width=5)
         self.heavy_thickness_var = make_entry(gf, 3, "Heavy thickness:", "2", width=5)
         self.dashed_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(gf, text="Dashed lines", variable=self.dashed_var,
@@ -170,7 +170,7 @@ class App(tk.Tk):
         # Colors ──────────────────────────────────────────────────────────────
         cf = ttk.LabelFrame(left, text="Colors", padding=6)
         cf.pack(fill="x", **pad)
-        self._line_btn  = self._make_color_row(cf, 0, "Grid lines:",   self._line_color)
+        self._line_btn = self._make_color_row(cf, 0, "Grid lines:",   self._line_color)
         self._heavy_btn = self._make_color_row(cf, 1, "Heavy lines:",  self._heavy_color)
         self._index_btn = self._make_color_row(cf, 2, "Labels:",       self._index_color)
 
@@ -180,7 +180,7 @@ class App(tk.Tk):
 
         self.title_vars = []
         defaults = ["Ginger Plays Games", "Double Dungeons", "", ""]
-        hints    = ["Line 1", "Line 2", "Line 3 ({size} = auto)", "Line 4 ({dpi} = auto)"]
+        hints = ["Line 1", "Line 2", "Line 3 ({size} = auto)", "Line 4 ({dpi} = auto)"]
         for i, (d, h) in enumerate(zip(defaults, hints)):
             tk.Label(tf, text=f"{h}:", anchor="w").grid(row=i, column=0, sticky="w", padx=8, pady=2)
             var = tk.StringVar(value=d)
@@ -407,13 +407,13 @@ class App(tk.Tk):
         vals = self.dungeon_presets.get(self.dungeon_var.get())
         if not vals:
             return
-        w    = vals["page_w"]
-        h    = vals["page_h"]
+        w = vals["page_w"]
+        h = vals["page_h"]
         notes = vals["notes_in"]
         dcols = vals.get("dungeon_cols")
         drows = vals.get("dungeon_rows")
-        sc    = vals.get("start_col")
-        sr    = vals.get("start_row")
+        sc = vals.get("start_col")
+        sr = vals.get("start_row")
         self.width_var.set(str(w))
         self.height_var.set(str(h))
         self.notes_bottom_var.set(str(notes))
@@ -434,20 +434,20 @@ class App(tk.Tk):
     def _auto_sheets(self):
         """Compute sheets_wide/tall needed to fit the dungeon on the current page size."""
         try:
-            width_in  = float(self.width_var.get())
+            width_in = float(self.width_var.get())
             height_in = float(self.height_var.get())
             margin_in = float(self.margin_var.get())
-            notes_in  = float(self.notes_bottom_var.get() or 0)
-            grid_in    = GRID_SIZES[self.grid_size_var.get()]
-            box_cells  = max(1, int(self.box_cells_var.get() or 4))
-            box_in     = box_cells * grid_in
+            notes_in = float(self.notes_bottom_var.get() or 0)
+            grid_in = GRID_SIZES[self.grid_size_var.get()]
+            box_cells = max(1, int(self.box_cells_var.get() or 4))
+            box_in = box_cells * grid_in
             dcols = int(self.dungeon_cols_var.get()) if self.dungeon_cols_var.get().strip() else None
             drows = int(self.dungeon_rows_var.get()) if self.dungeon_rows_var.get().strip() else None
             if not dcols or not drows:
                 return
             dung_w = dcols * grid_in
             dung_h = drows * grid_in
-            content_w = width_in  - 2 * margin_in
+            content_w = width_in - 2 * margin_in
             content_h = height_in - 2 * margin_in
             # height budget: dungeon + title-block offset (1 box) + notes on last row
             sw = max(1, math.ceil(dung_w / content_w))
@@ -481,7 +481,7 @@ class App(tk.Tk):
 
     def _read_params(self):
         dpi = int(self.dpi_var.get())
-        width_in  = float(self.width_var.get())
+        width_in = float(self.width_var.get())
         height_in = float(self.height_var.get())
         fs = self.font_size_var.get().strip()
 
@@ -512,8 +512,8 @@ class App(tk.Tk):
             "tab_in":           TAB_SIZES[self.tab_size_var.get()],
             "tab_style":        self.tab_style_var.get(),
             "notes_bottom_in":  float(self.notes_bottom_var.get() or 0) if self.notes_enabled_var.get() else 0.0,
-            "start_col":    int(self.start_col_var.get())    if self.start_col_var.get().strip()    else None,
-            "start_row":    int(self.start_row_var.get())    if self.start_row_var.get().strip()    else None,
+            "start_col":    int(self.start_col_var.get()) if self.start_col_var.get().strip() else None,
+            "start_row":    int(self.start_row_var.get()) if self.start_row_var.get().strip() else None,
             "dungeon_cols": int(self.dungeon_cols_var.get()) if self.dungeon_cols_var.get().strip() else None,
             "dungeon_rows": int(self.dungeon_rows_var.get()) if self.dungeon_rows_var.get().strip() else None,
         }
@@ -572,8 +572,8 @@ class App(tk.Tk):
                 sheets[(col, row)] = img
 
         # tile into one image
-        sw_px = sheets[(0,0)].width
-        sh_px = sheets[(0,0)].height
+        sw_px = sheets[(0, 0)].width
+        sh_px = sheets[(0, 0)].height
         composite_w = sw * sw_px + (sw - 1) * border
         composite_h = st * sh_px + (st - 1) * border
         composite = Image.new("RGB", (composite_w, composite_h), "#ccc")
@@ -594,7 +594,7 @@ class App(tk.Tk):
             return
         img = self._preview_base
         if self._preview_zoom != 1.0:
-            nw = max(1, int(img.width  * self._preview_zoom))
+            nw = max(1, int(img.width * self._preview_zoom))
             nh = max(1, int(img.height * self._preview_zoom))
             img = img.resize((nw, nh), Image.LANCZOS)
         photo = ImageTk.PhotoImage(img)
@@ -627,12 +627,12 @@ class App(tk.Tk):
 
     def _generate_worker(self, canvas_w, canvas_h):
         try:
-            params  = self._read_params()
-            output  = self.output_var.get()
-            sw, st  = params["sheets_wide"], params["sheets_tall"]
-            is_pdf  = output.lower().endswith(".pdf")
-            dpi     = params["dpi"]
-            kw      = {k: v for k, v in params.items()
+            params = self._read_params()
+            output = self.output_var.get()
+            sw, st = params["sheets_wide"], params["sheets_tall"]
+            is_pdf = output.lower().endswith(".pdf")
+            dpi = params["dpi"]
+            kw = {k: v for k, v in params.items()
                        if k not in ("dpi", "sheets_wide", "sheets_tall")}
 
             if sw == 1 and st == 1:
@@ -700,9 +700,9 @@ class App(tk.Tk):
         def worker():
             try:
                 params = self._read_params()
-                dpi    = params["dpi"]
+                dpi = params["dpi"]
                 sw, st = params["sheets_wide"], params["sheets_tall"]
-                kw     = {k: v for k, v in params.items()
+                kw = {k: v for k, v in params.items()
                           if k not in ("dpi", "sheets_wide", "sheets_tall")}
                 if sw == 1 and st == 1:
                     img = generate_graph_paper(dpi=dpi, sheets_wide=1, sheets_tall=1, **kw)

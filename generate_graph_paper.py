@@ -62,26 +62,26 @@ def generate_graph_paper(
     dungeon_cols=None, dungeon_rows=None,  # total dungeon size in grid squares
     tab_style="tape",   # "tape" | "insert"
 ):
-    width_px  = int(width_in  * dpi)
+    width_px = int(width_in * dpi)
     height_px = int(height_in * dpi)
     margin_px = int(margin_in * dpi)
-    grid_px      = max(1, int(grid_size_in * dpi))
-    box_px       = max(grid_px, int(box_size_in * dpi))
+    grid_px = max(1, int(grid_size_in * dpi))
+    box_px = max(grid_px, int(box_size_in * dpi))
     grid_per_box = max(1, round(box_px / grid_px))  # grid steps per box interval
-    tab_px    = int(tab_in * dpi) if (sheets_wide > 1 or sheets_tall > 1) else 0
+    tab_px = int(tab_in * dpi) if (sheets_wide > 1 or sheets_tall > 1) else 0
     # notes only on the bottom row of sheets
-    notes_px  = int(notes_bottom_in * dpi) if sheet_row == sheets_tall - 1 else 0
+    notes_px = int(notes_bottom_in * dpi) if sheet_row == sheets_tall - 1 else 0
 
     dash_length = max(4, int(dpi * 0.045))
-    gap_length  = dash_length
+    gap_length = dash_length
 
     def seam_tabs(seam_top, seam_bot):
         """Return list of (gap_top, tab_top, tab_bot, gap_bot) in px."""
-        seam_len   = seam_bot - seam_top
-        period     = max(grid_px * 4, int(box_px * 1.2))
-        n_periods  = max(2, round(seam_len / period))
+        seam_len = seam_bot - seam_top
+        period = max(grid_px * 4, int(box_px * 1.2))
+        n_periods = max(2, round(seam_len / period))
         act_period = seam_len / n_periods
-        tab_h      = round(act_period * 0.5)
+        tab_h = round(act_period * 0.5)
         tabs = []
         for i in range(n_periods):
             gap_top = seam_top + i * act_period
@@ -94,7 +94,7 @@ def generate_graph_paper(
     font = _scaled_font(font_size)
 
     label_font_size = max(1, grid_px // 2)
-    label_font  = _scaled_font(label_font_size)
+    label_font = _scaled_font(label_font_size)
     label_color = (180, 180, 180)
 
     # title block font: fit n_lines inside one box height
@@ -105,16 +105,16 @@ def generate_graph_paper(
             f"{width_in:.4g}\u00d7{height_in:.4g} in",
             f"{dpi} DPI",
         ]
-    n_lines    = max(1, len(title_lines))
-    pad_inner  = max(2, box_px // 12)
-    line_gap   = max(1, box_px // 20)
-    max_tf     = max(1, (box_px - pad_inner) // n_lines - line_gap)
+    n_lines = max(1, len(title_lines))
+    pad_inner = max(2, box_px // 12)
+    line_gap = max(1, box_px // 20)
+    max_tf = max(1, (box_px - pad_inner) // n_lines - line_gap)
     title_font_size = min(max(1, int(box_px * 0.22)), max_tf)
     title_font = _scaled_font(title_font_size)
 
     # ── multi-sheet grid offset ──────────────────────────────────────────
-    usable_w_px  = width_px  - 2 * margin_px
-    usable_h_px  = height_px - 2 * margin_px - notes_px
+    usable_w_px = width_px - 2 * margin_px
+    usable_h_px = height_px - 2 * margin_px - notes_px
     content_w_px = max(1, usable_w_px - tab_px)
     content_h_px = max(1, usable_h_px - tab_px)
 
@@ -132,11 +132,11 @@ def generate_graph_paper(
     # ── image setup ──────────────────────────────────────────────────────
     print(f"Sheet ({sheet_col},{sheet_row}) of {sheets_wide}×{sheets_tall} — "
           f"{width_in}×{height_in}in @ {dpi} DPI")
-    img  = Image.new("RGB", (width_px, height_px), "white")
+    img = Image.new("RGB", (width_px, height_px), "white")
     draw = ImageDraw.Draw(img)
 
     # ── tab zone shading ─────────────────────────────────────────────────
-    tab_fill  = (210, 230, 255)
+    tab_fill = (210, 230, 255)
     slot_fill = (220, 255, 220)
     if tab_px > 0:
         if sheet_col > 0:
@@ -198,9 +198,9 @@ def generate_graph_paper(
 
     # ── cut / insert guides ───────────────────────────────────────────────
     if tab_px > 0:
-        cut_color  = (200, 40, 40)
+        cut_color = (200, 40, 40)
         slot_color = (30, 140, 30)
-        cut_w      = max(1, heavy_thickness)
+        cut_w = max(1, heavy_thickness)
         guide_dash = max(4, dpi // 15)
 
         if tab_style == "tape":
@@ -339,8 +339,8 @@ def generate_graph_paper(
     if dungeon_cols and dungeon_rows:
         total_w = sheets_wide * content_w_px
         total_h = sheets_tall * content_h_px - dung_origin_y
-        dung_w  = dungeon_cols * grid_px
-        dung_h  = dungeon_rows * grid_px
+        dung_w = dungeon_cols * grid_px
+        dung_h = dungeon_rows * grid_px
         # centre offset, snapped to grid
         raw_x = max(0, (total_w - dung_w) // 2)
         raw_y = max(0, (total_h - dung_h) // 2)
@@ -349,9 +349,9 @@ def generate_graph_paper(
 
         border_color = (60, 60, 60)
         border_w = max(2, heavy_thickness + 1)
-        lx = margin_px + dung_x_off                          - x_abs_base
-        ty = margin_px + dung_origin_y + dung_y_off          - y_abs_base
-        rx = margin_px + dung_x_off + dung_w                 - x_abs_base
+        lx = margin_px + dung_x_off - x_abs_base
+        ty = margin_px + dung_origin_y + dung_y_off - y_abs_base
+        rx = margin_px + dung_x_off + dung_w - x_abs_base
         by = margin_px + dung_origin_y + dung_y_off + dung_h - y_abs_base
         sx0, sy0 = margin_px, margin_px
         sx1, sy1 = width_px - margin_px, grid_bottom
@@ -461,7 +461,7 @@ def main():
     parser.add_argument("--dpi",         type=int,   default=150)
     parser.add_argument("--output",      default="graph_paper.png")
     parser.add_argument("--margin-in",   type=float, default=0.25)
-    parser.add_argument("--grid-size-in",type=float, default=0.25)
+    parser.add_argument("--grid-size-in", type=float, default=0.25)
     parser.add_argument("--box-size-in", type=float, default=1.0)
     parser.add_argument("--font-size",   type=int,   default=None)
     args = parser.parse_args()
